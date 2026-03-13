@@ -1,9 +1,9 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
 import { execSync } from "child_process";
 import { randomBytes } from "crypto";
 import { logger } from "../utils/logger";
+import { envFilePath, projectRoot } from "../utils/paths";
 
 interface SetupApplyBody {
   domain: string;
@@ -16,7 +16,7 @@ const DB_URL_REGEX = /^DATABASE_URL\s*=\s*"?([^"\n\r]+)"?\s*$/m;
 const ENCRYPTION_KEY_REGEX = /^ENCRYPTION_KEY\s*=\s*"?([0-9a-fA-F]{64})"?\s*$/m;
 
 function getEnvPath(): string {
-  return join(process.cwd(), ".env");
+  return envFilePath;
 }
 
 function readDatabaseUrl(): string | null {
@@ -120,7 +120,7 @@ ENCRYPTION_KEY="${encryptionKey}"
   logger.info("Setup: generating Prisma client…");
   try {
     execSync("bunx prisma generate", {
-      cwd: process.cwd(),
+      cwd: projectRoot,
       env: { ...process.env, DATABASE_URL: databaseUrl, ENCRYPTION_KEY: encryptionKey },
       stdio: "pipe",
       timeout: 60_000,
@@ -138,7 +138,7 @@ ENCRYPTION_KEY="${encryptionKey}"
   logger.info("Setup: running database migrations…");
   try {
     execSync("bunx prisma db push --accept-data-loss", {
-      cwd: process.cwd(),
+      cwd: projectRoot,
       env: { ...process.env, DATABASE_URL: databaseUrl, ENCRYPTION_KEY: encryptionKey },
       stdio: "pipe",
       timeout: 60_000,

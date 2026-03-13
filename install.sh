@@ -152,7 +152,7 @@ fi
 success "PM2 $(pm2 --version) ready."
 
 # ─── Clone / update repo ───────────────────────────────────────────────────────
-INSTALL_DIR="/opt/versiongate"
+INSTALL_DIR="/opt/VersionGate"
 REPO_URL="https://github.com/versiongate-tech/VersionGate.git"
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then

@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
+import { envFilePath } from "../utils/paths";
 
-dotenv.config();
+dotenv.config({ path: envFilePath });
 
 function optionalEnv(key: string, fallback: string): string {
   return process.env[key] ?? fallback;

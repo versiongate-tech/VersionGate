@@ -4,7 +4,7 @@ module.exports = {
       name: "versiongate-engine",
       script: "src/server.ts",
       interpreter: "bun",
-      cwd: "/opt/versiongate",
+      cwd: "/opt/VersionGate",
       watch: false,
       autorestart: true,
       max_restarts: 10,

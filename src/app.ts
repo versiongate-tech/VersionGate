@@ -1,9 +1,10 @@
 import Fastify, { FastifyInstance } from "fastify";
-import { join } from "path";
 import { existsSync } from "fs";
+import { join } from "path";
 import { config } from "./config/env";
 import { logger } from "./utils/logger";
 import { AppError } from "./utils/errors";
+import { dashboardOutDir } from "./utils/paths";
 import { deploymentRoutes } from "./routes/deployment.routes";
 import { projectRoutes } from "./routes/project.routes";
 import { systemRoutes } from "./routes/system.routes";
@@ -73,15 +74,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(setupRoutes, { prefix: "/api/v1" });
 
   // ── Dashboard static serving ────────────────────────────────────────────────
-  const dashboardPath = join(process.cwd(), "dashboard", "out");
-  if (existsSync(dashboardPath)) {
+  if (existsSync(dashboardOutDir)) {
     const fastifyStatic = (await import("@fastify/static")).default;
     await app.register(fastifyStatic, {
-      root: dashboardPath,
+      root: dashboardOutDir,
       wildcard: false,
       index: "index.html",
     });
-    logger.info({ dashboardPath }, "Dashboard static files registered");
+    logger.info({ dashboardPath: dashboardOutDir }, "Dashboard static files registered");
   } else {
     logger.warn("Dashboard not built — run: cd dashboard && bun install && bun run build");
   }
@@ -97,11 +97,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply.code(404).send({ error: "Not Found", message: `${req.method} ${req.url} not found` });
     }
 
-    const outDir = join(process.cwd(), "dashboard", "out");
-
     // RSC payload requests: /projects/:id/index.txt?_rsc=...
     if (/^\/projects\/[^/]+\/index\.txt/.test(req.url)) {
-      const txt = join(outDir, "projects", "__placeholder__", "index.txt");
+      const txt = join(dashboardOutDir, "projects", "__placeholder__", "index.txt");
       if (existsSync(txt)) {
         return reply.type("text/x-component").sendFile("projects/__placeholder__/index.txt");
       }
@@ -109,14 +107,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     // Project detail HTML: /projects/:id or /projects/:id/
     if (/^\/projects\/[^/]+(\/)?(\?.*)?$/.test(req.url)) {
-      const html = join(outDir, "projects", "__placeholder__", "index.html");
+      const html = join(dashboardOutDir, "projects", "__placeholder__", "index.html");
       if (existsSync(html)) {
         return reply.type("text/html").sendFile("projects/__placeholder__/index.html");
       }
     }
 
     // Default: serve root index.html as SPA shell
-    const indexPath = join(outDir, "index.html");
+    const indexPath = join(dashboardOutDir, "index.html");
     if (existsSync(indexPath)) {
       return reply.type("text/html").sendFile("index.html");
     }
