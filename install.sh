@@ -188,7 +188,7 @@ PORT=9090
 NODE_ENV=production
 DOCKER_NETWORK="versiongate-net"
 NGINX_CONFIG_PATH="/etc/nginx/conf.d/versiongate.conf"
-PROJECTS_BASE_PATH="/var/versiongate/projects"
+PROJECTS_ROOT_PATH="/var/versiongate/projects"
 EOF
 
 if [[ -n "$GEMINI_API_KEY" ]]; then

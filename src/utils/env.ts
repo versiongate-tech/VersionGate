@@ -1,3 +1,5 @@
+import { decrypt } from "./crypto";
+
 /**
  * Safely converts a Prisma JsonValue (project.env) into a plain
  * Record<string, string> suitable for docker -e injection.
@@ -14,6 +16,22 @@ export function parseProjectEnv(raw: unknown): Record<string, string> {
       result[key] = value;
     }
   }
+  return result;
+}
+
+/**
+ * Decrypts a flat env object read from the database.
+ * Existing plaintext values from before encryption support will fail here
+ * and should be re-saved through the API so they are stored encrypted.
+ */
+export function decryptProjectEnv(raw: unknown): Record<string, string> {
+  const parsed = parseProjectEnv(raw);
+  const result: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(parsed)) {
+    result[key] = decrypt(value);
+  }
+
   return result;
 }
 

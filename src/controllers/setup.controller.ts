@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
+import { randomBytes } from "crypto";
 import { logger } from "../utils/logger";
 
 interface SetupApplyBody {
@@ -12,6 +13,7 @@ interface SetupApplyBody {
 
 const NGINX_CONF_PATH = "/etc/nginx/conf.d/versiongate.conf";
 const DB_URL_REGEX = /^DATABASE_URL\s*=\s*"?([^"\n\r]+)"?\s*$/m;
+const ENCRYPTION_KEY_REGEX = /^ENCRYPTION_KEY\s*=\s*"?([0-9a-fA-F]{64})"?\s*$/m;
 
 function getEnvPath(): string {
   return join(process.cwd(), ".env");
@@ -29,6 +31,15 @@ function readDatabaseUrl(): string | null {
 function isConfigured(): boolean {
   const dbUrl = readDatabaseUrl();
   return !!dbUrl && dbUrl.length > 0;
+}
+
+function readExistingEncryptionKey(): string | null {
+  const envPath = getEnvPath();
+  if (!existsSync(envPath)) return null;
+
+  const content = readFileSync(envPath, "utf-8");
+  const match = content.match(ENCRYPTION_KEY_REGEX);
+  return match ? match[1] : null;
 }
 
 async function canConnectToDatabase(databaseUrl: string): Promise<boolean> {
@@ -87,13 +98,15 @@ export async function applySetupHandler(
   // 2. Write .env file
   const envPath = getEnvPath();
   logger.info({ envPath }, "Setup: writing .env file…");
+  const encryptionKey = readExistingEncryptionKey() ?? randomBytes(32).toString("hex");
 
   let envContent = `DATABASE_URL="${databaseUrl}"
 PORT=9090
 NODE_ENV=production
 DOCKER_NETWORK="versiongate-net"
 NGINX_CONFIG_PATH="${NGINX_CONF_PATH}"
-PROJECTS_BASE_PATH="/var/versiongate/projects"
+PROJECTS_ROOT_PATH="/var/versiongate/projects"
+ENCRYPTION_KEY="${encryptionKey}"
 `;
 
   if (geminiApiKey && geminiApiKey.trim().length > 0) {
@@ -103,12 +116,30 @@ PROJECTS_BASE_PATH="/var/versiongate/projects"
   writeFileSync(envPath, envContent, "utf-8");
   logger.info("Setup: .env written successfully");
 
-  // 3. Run prisma db push (--accept-data-loss is safe here: this is initial setup on an empty DB)
+  // 3. Generate Prisma client and push the schema so setup stays fully UI-driven.
+  logger.info("Setup: generating Prisma client…");
+  try {
+    execSync("bunx prisma generate", {
+      cwd: process.cwd(),
+      env: { ...process.env, DATABASE_URL: databaseUrl, ENCRYPTION_KEY: encryptionKey },
+      stdio: "pipe",
+      timeout: 60_000,
+    });
+    logger.info("Setup: Prisma client generated");
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ err: msg }, "Setup: prisma generate failed");
+    return reply.code(500).send({
+      error: "SetupError",
+      message: "Prisma client generation failed: " + msg,
+    });
+  }
+
   logger.info("Setup: running database migrations…");
   try {
     execSync("bunx prisma db push --accept-data-loss", {
       cwd: process.cwd(),
-      env: { ...process.env, DATABASE_URL: databaseUrl },
+      env: { ...process.env, DATABASE_URL: databaseUrl, ENCRYPTION_KEY: encryptionKey },
       stdio: "pipe",
       timeout: 60_000,
     });

@@ -32,6 +32,7 @@ model Project {
   buildContext  String       @default(".")
   webhookSecret String?     @unique
   env           Json        @default("{}")
+  lockedAt      DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   deployments Deployment[]
