@@ -1,4 +1,5 @@
 import { DeploymentRepository } from "../repositories/deployment.repository";
+import { ProjectRepository } from "../repositories/project.repository";
 import { stopContainer, removeContainer, inspectContainer } from "../utils/docker";
 import { DeploymentStatus } from "@prisma/client";
 import { logger } from "../utils/logger";
@@ -10,9 +11,11 @@ export interface ReconciliationReport {
 
 export class ReconciliationService {
   private readonly repo: DeploymentRepository;
+  private readonly projectRepo: ProjectRepository;
 
   constructor() {
     this.repo = new DeploymentRepository();
+    this.projectRepo = new ProjectRepository();
   }
 
   /**
@@ -31,9 +34,13 @@ export class ReconciliationService {
     logger.info("Starting startup reconciliation");
 
     const deployingFixed = await this.fixDeployingDeployments();
+    const staleLocksCleared = await this.projectRepo.clearStaleDeployLocks();
     const activeInvalidated = await this.auditActiveDeployments();
 
-    logger.info({ deployingFixed, activeInvalidated }, "Reconciliation complete");
+    logger.info(
+      { deployingFixed, staleLocksCleared, activeInvalidated },
+      "Reconciliation complete"
+    );
     return { deployingFixed, activeInvalidated };
   }
 

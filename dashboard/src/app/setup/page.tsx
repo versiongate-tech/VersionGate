@@ -47,7 +47,14 @@ export default function SetupWizard() {
         return;
       }
 
-      setApplyLog((prev) => [...prev, "Configuration saved ✓", "Database migrated ✓", "Setup complete!"]);
+      setApplyLog((prev) => [
+        ...prev,
+        "Environment file saved ✓",
+        "Security key created ✓",
+        "Prisma client generated ✓",
+        "Database prepared ✓",
+        "Setup complete!",
+      ]);
       setTimeout(() => setStep("done"), 1200);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Network error";
@@ -67,7 +74,7 @@ export default function SetupWizard() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold tracking-tight">VersionGate Setup</h1>
-          <p className="text-zinc-500 text-sm mt-1">Configure your deployment engine</p>
+          <p className="text-zinc-500 text-sm mt-1">Configure your deployment engine from the UI</p>
         </div>
 
         {/* Progress bar */}
@@ -91,7 +98,7 @@ export default function SetupWizard() {
             <div>
               <h2 className="text-lg font-semibold mb-2">Welcome</h2>
               <p className="text-zinc-400 text-sm leading-relaxed mb-6">
-                This wizard will configure your VersionGate instance. You&apos;ll need:
+                This wizard will configure your VersionGate instance end-to-end. You&apos;ll need:
               </p>
               <ul className="text-sm text-zinc-400 space-y-2 mb-6">
                 <li className="flex items-start gap-2">
@@ -107,6 +114,9 @@ export default function SetupWizard() {
                   <span className="text-zinc-500">Optional: Gemini API key for AI pipeline generation</span>
                 </li>
               </ul>
+              <p className="text-xs text-zinc-500 mb-6">
+                VersionGate will generate its encryption key and prepare Prisma automatically during setup.
+              </p>
               <button
                 onClick={() => setStep("database")}
                 className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-medium text-sm transition-colors"
@@ -212,7 +222,7 @@ export default function SetupWizard() {
                 className="w-full px-3 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm placeholder:text-zinc-600 focus:outline-none focus:border-emerald-600 transition-colors"
               />
               <p className="text-zinc-600 text-xs mt-1.5">
-                Used for AI-generated CI/CD pipeline YAML. Can be added later via .env file.
+                Used for AI-generated CI/CD pipeline YAML. You can skip this and add it later.
               </p>
               {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
               <div className="flex gap-3 mt-6">
@@ -242,6 +252,9 @@ export default function SetupWizard() {
                 </svg>
               </div>
               <h2 className="text-lg font-semibold mb-3">Configuring…</h2>
+              <p className="text-sm text-zinc-400 mb-3">
+                Writing configuration, generating the encryption key, preparing Prisma, and setting up the database.
+              </p>
               <div className="text-left bg-zinc-800/50 rounded-lg p-3">
                 {applyLog.map((line, i) => (
                   <p key={i} className="text-xs text-zinc-400 font-mono py-0.5">{line}</p>
@@ -260,7 +273,7 @@ export default function SetupWizard() {
               </div>
               <h2 className="text-lg font-semibold mb-2">All Set!</h2>
               <p className="text-zinc-400 text-sm mb-6">
-                VersionGate is configured and ready to use.
+                VersionGate is configured and ready to use. No manual `.env` edits or Prisma commands are needed now.
               </p>
               <a
                 href="/"

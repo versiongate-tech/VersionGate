@@ -20,8 +20,6 @@ export interface DeployResult {
 }
 
 export class DeploymentService {
-  // In-memory lock per project — prevents concurrent deploys on the same project
-  private static readonly locks = new Map<string, boolean>();
   // Projects for which a cancel has been requested mid-deploy
   private static readonly cancelRequests = new Set<string>();
 
@@ -52,19 +50,18 @@ export class DeploymentService {
   async deploy(opts: DeployOptions): Promise<DeployResult> {
     const { projectId } = opts;
 
-    if (!this.acquireLock(projectId)) {
+    const project = await this.projectRepo.findById(projectId);
+    if (!project) {
+      throw new NotFoundError(`Project ${projectId}`);
+    }
+
+    if (!(await this.acquireLock(projectId))) {
       throw new ConflictError(`Deployment already in progress for project ${projectId}`);
     }
 
     let deploymentId: string | undefined;
 
     try {
-      // ── Fetch project ──────────────────────────────────────────────────────
-      const project = await this.projectRepo.findById(projectId);
-      if (!project) {
-        throw new NotFoundError(`Project ${projectId}`);
-      }
-
       logger.info({ projectId, name: project.name }, "Starting deployment pipeline");
 
       // ── Step 1: Prepare source ─────────────────────────────────────────────
@@ -175,7 +172,7 @@ export class DeploymentService {
       throw err;
     } finally {
       DeploymentService.cancelRequests.delete(projectId);
-      this.releaseLock(projectId);
+      await this.releaseLock(projectId);
     }
   }
 
@@ -191,10 +188,8 @@ export class DeploymentService {
       throw new NotFoundError(`No in-progress deployment found for project ${projectId}`);
     }
 
-    // If there's an active lock, signal the running pipeline to stop
-    if (DeploymentService.locks.get(projectId)) {
-      DeploymentService.cancelRequests.add(projectId);
-    }
+    // Signal the running pipeline to stop if this process is handling it.
+    DeploymentService.cancelRequests.add(projectId);
 
     // Stop + remove the container regardless (handles stale DEPLOYING records too)
     if (deploying.containerName) {
@@ -205,8 +200,8 @@ export class DeploymentService {
     // Mark the deployment as FAILED so the UI unblocks
     await this.repo.updateStatus(deploying.id, DeploymentStatus.FAILED, "Cancelled by user").catch(() => null);
 
-    // Release the lock if held
-    DeploymentService.locks.delete(projectId);
+    // Release the persisted lock so a fresh deploy can start.
+    await this.releaseLock(projectId);
     DeploymentService.cancelRequests.delete(projectId);
 
     logger.info({ projectId, deploymentId: deploying.id }, "Deployment cancelled");
@@ -233,18 +228,20 @@ export class DeploymentService {
     }
   }
 
-  private acquireLock(projectId: string): boolean {
-    if (DeploymentService.locks.get(projectId)) {
+  private async acquireLock(projectId: string): Promise<boolean> {
+    const acquired = await this.projectRepo.acquireDeployLock(projectId);
+
+    if (!acquired) {
       logger.warn({ projectId }, "Deploy lock already held — rejecting concurrent deploy");
       return false;
     }
-    DeploymentService.locks.set(projectId, true);
+
     logger.info({ projectId }, "Deploy lock acquired");
     return true;
   }
 
-  private releaseLock(projectId: string): void {
-    DeploymentService.locks.delete(projectId);
+  private async releaseLock(projectId: string): Promise<void> {
+    await this.projectRepo.releaseDeployLock(projectId);
     logger.info({ projectId }, "Deploy lock released");
   }
 }

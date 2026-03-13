@@ -54,11 +54,26 @@ pm2 start ecosystem.config.cjs
 pm2 save
 ```
 
-### 3. Open the setup wizard
+### 3. Complete setup from the UI
 
 Navigate to `http://your-server-ip:9090/setup` in your browser.
 
-Fill in your **domain**, **PostgreSQL connection string**, and optional **Gemini API key** — the wizard writes the config, migrates the database, and configures Nginx automatically. The engine restarts itself and redirects you to the dashboard.
+Fill in your:
+
+- **PostgreSQL connection string**
+- **Domain or server IP**
+- Optional **Gemini API key**
+
+The setup wizard handles the rest for you:
+
+- Writes the `.env` file
+- Sets `PROJECTS_ROOT_PATH`
+- Generates and persists `ENCRYPTION_KEY`
+- Runs `bunx prisma generate`
+- Runs `bunx prisma db push --accept-data-loss`
+- Writes and reloads Nginx config when possible
+
+No manual `.env` edits or Prisma commands are required after opening `/setup`.
 
 ---
 
