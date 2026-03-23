@@ -1,0 +1,51 @@
+name: Feature Request
+description: Propose a new feature or enhancement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to propose a new feature!
+  - type: textarea
+    id: overview
+    attributes:
+      label: Overview
+      description: A short description of the feature and its purpose.
+      placeholder: What does this feature do and why is it needed?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What problem does this solve? What is the motivation?
+      placeholder: Explain the use case and benefit.
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Implementation Tasks
+      description: A checklist of tasks required to implement this feature.
+      placeholder: |
+        - [ ] Task 1
+        - [ ] Task 2
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the codebase does this affect?
+      multiple: true
+      options:
+        - backend
+        - frontend
+        - database
+        - infrastructure
+        - security
+        - api
+        - ui
+    validations:
+      required: false

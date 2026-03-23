@@ -1,0 +1,429 @@
+name: Create Planned Issues
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (print issues without creating them)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create-labels:
+    name: Ensure labels exist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: 'enhancement', color: 'a2eeef', description: 'New feature or request' },
+              { name: 'security', color: 'e4e669', description: 'Security-related change' },
+              { name: 'infrastructure', color: 'd93f0b', description: 'Infrastructure and DevOps' },
+              { name: 'database', color: '0075ca', description: 'Database schema or migrations' },
+              { name: 'backend', color: '5319e7', description: 'Backend API or services' },
+              { name: 'frontend', color: 'f9d0c4', description: 'Dashboard / UI changes' },
+              { name: 'ui', color: 'fef2c0', description: 'User interface' },
+              { name: 'api', color: 'c5def5', description: 'API endpoint changes' },
+              { name: 'good first issue', color: '7057ff', description: 'Good for newcomers' },
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                });
+                console.log(`Created label: ${label.name}`);
+              } catch (e) {
+                if (e.status === 422) {
+                  console.log(`Label already exists: ${label.name}`);
+                } else {
+                  console.error(`Error creating label ${label.name}:`, e.message);
+                }
+              }
+            }
+
+  create-issues:
+    name: Create planned issues
+    runs-on: ubuntu-latest
+    needs: create-labels
+    steps:
+      - name: Create issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const dryRun = '${{ github.event.inputs.dry_run }}' === 'true';
+
+            const issues = [
+              {
+                title: 'feat: Environment model (Prisma schema)',
+                labels: ['enhancement', 'database', 'backend'],
+                body: `## Overview
+
+Add **Environments** as a first-class concept in VersionGate. Currently projects map directly to deployments. This issue migrates the data model to \`Project → Environment → Deployment\`, where each environment (dev, staging, prod) has its own server target, port range, branch, and deployment history.
+
+## Why
+
+A flat project-to-deployment mapping makes it impossible to track separate deployment lifecycles for dev, staging, and prod within a single project. Environments unlock the promotion pipeline, per-environment config, and gate checks described in subsequent issues.
+
+## Implementation Tasks
+
+- [ ] Add \`Environment\` model to \`prisma/schema.prisma\` with fields:
+  - \`id\`, \`name\` (e.g. dev / staging / prod), \`projectId\`
+  - \`branch\`, \`serverHost\`, \`basePort\`, \`appPort\`
+  - \`createdAt\`, \`updatedAt\`
+- [ ] Add \`Project → Environment\` one-to-many relation
+- [ ] Migrate \`Deployment\` foreign key from \`projectId\` to \`environmentId\`
+- [ ] Write and run a Prisma migration
+- [ ] Update \`ProjectRepository\` and \`DeploymentRepository\` queries
+- [ ] Update \`deployment.service.ts\` to accept an \`environmentId\`
+- [ ] Update all API request/response schemas to include \`environmentId\`
+- [ ] Seed default \`prod\` environment for existing projects on migration
+- [ ] Update TypeScript types across the codebase`,
+              },
+              {
+                title: 'feat: Promote without rebuilding',
+                labels: ['enhancement', 'backend', 'api'],
+                body: `## Overview
+
+When promoting a build from staging to production, **reuse the Docker image tag** from the successful staging deployment instead of triggering a new build from source. Implement a \`POST /projects/:id/environments/:envId/promote\` endpoint wired into the deployment service.
+
+## Why
+
+Building twice introduces variance — the prod image may differ from the staging image if dependencies change between builds. "Build once, promote the artifact" is the industry-standard approach and a prerequisite for reliable promotion pipelines.
+
+## Implementation Tasks
+
+- [ ] Add \`POST /api/v1/projects/:id/environments/:envId/promote\` route
+- [ ] Create \`promote.controller.ts\` handler
+- [ ] Add \`promoteDeployment(sourceEnvId, targetEnvId)\` method to \`deployment.service.ts\`
+  - Look up the last ACTIVE deployment in the source environment
+  - Re-use its \`imageTag\` rather than rebuilding from Git
+  - Create a new \`Deployment\` record in the target environment with the same \`imageTag\`
+  - Run the container start + traffic-switch steps (skip build + git pull)
+- [ ] Store \`promotedFromId\` (foreign key) on the new \`Deployment\` record
+- [ ] Add route schema (request body, response) with Fastify JSON schema
+- [ ] Return 409 if the source environment has no ACTIVE deployment
+- [ ] Return 423 if a deployment lock is held on the target environment
+- [ ] Update the \`DeploymentRepository\` with a \`findActiveByEnvironment\` query`,
+              },
+              {
+                title: 'feat: Environment chain dashboard UI',
+                labels: ['enhancement', 'frontend', 'ui'],
+                body: `## Overview
+
+Add a visual **dev → staging → prod chain** to the project detail page. Each stage shows its current deployment version, status badge, and a **Promote** button. The Promote button is disabled if the upstream environment has not deployed successfully.
+
+## Why
+
+Without a visual pipeline view, operators must check each environment independently and manually track which version is running where. A chain view makes promotion status immediately obvious and reduces operational errors.
+
+## Implementation Tasks
+
+- [ ] Create \`EnvironmentChain\` React component in \`dashboard/src/components/\`
+- [ ] Fetch environments list from \`GET /api/v1/projects/:id/environments\`
+- [ ] Display each environment as a card: name, current version, status badge
+- [ ] Add connecting arrows between environment cards (CSS or SVG)
+- [ ] Add **Promote** button on each environment card (except the first)
+  - Disabled when upstream environment \`status !== ACTIVE\`
+  - Calls \`POST /api/v1/projects/:id/environments/:envId/promote\`
+- [ ] Show a loading spinner during promotion
+- [ ] Show success/error toast notifications after promotion
+- [ ] Add \`GET /api/v1/projects/:id/environments\` backend endpoint
+- [ ] Update the project detail page (\`dashboard/src/app/(app)/projects/[id]/page.tsx\`) to render \`EnvironmentChain\``,
+              },
+              {
+                title: 'feat: Per-environment environment variables',
+                labels: ['enhancement', 'security', 'backend', 'database'],
+                body: `## Overview
+
+Move environment variables from **per-project** to **per-environment**. Staging and production environments can then have different secrets. The existing AES-256 encryption in \`src/utils/crypto.ts\` is applied to each environment's variable set.
+
+## Why
+
+Projects currently share a single encrypted env-var blob. Staging and prod almost always need different database URLs, API keys, and feature flags. Per-environment vars are a fundamental requirement for safe multi-stage deployments.
+
+## Implementation Tasks
+
+- [ ] Add \`env\` (JSON, encrypted) field to the \`Environment\` model
+- [ ] Remove (or deprecate) the \`env\` field from the \`Project\` model
+- [ ] Write a data migration to copy existing project env vars to the default environment
+- [ ] Update \`PATCH /api/v1/projects/:id/environments/:envId/env\` endpoint
+  - Encrypt with AES-256 before saving (reuse \`src/utils/crypto.ts\`)
+- [ ] Update \`deployment.service.ts\` to read env vars from the environment record
+- [ ] Update \`updateProjectEnvHandler\` → \`updateEnvironmentEnvHandler\`
+- [ ] Update the dashboard UI: env var editor in the environment settings panel
+- [ ] Ensure env vars are never logged or included in API responses unencrypted`,
+              },
+              {
+                title: 'feat: Health check gate',
+                labels: ['enhancement', 'backend', 'infrastructure'],
+                body: `## Overview
+
+Before a promotion is allowed, the **source environment must pass a configurable health endpoint** for N consecutive checks. Configuration per environment: endpoint URL, polling interval (seconds), and required consecutive passes. Promotion is blocked at the API if the gate has not passed.
+
+## Why
+
+A successful deployment does not guarantee the application is actually healthy. Requiring consecutive health-check passes catches intermittent failures and crash-loops before they reach production.
+
+## Implementation Tasks
+
+- [ ] Add health check gate config fields to the \`Environment\` model:
+  - \`healthGateEnabled\` (Boolean, default false)
+  - \`healthGateUrl\` (String, optional)
+  - \`healthGateInterval\` (Int, seconds, default 30)
+  - \`healthGateRequiredPasses\` (Int, default 3)
+  - \`healthGatePassedAt\` (DateTime, nullable)
+- [ ] Create \`health-gate.service.ts\`:
+  - Poll \`healthGateUrl\` on the configured interval after deployment
+  - Track consecutive 2xx responses
+  - Update \`healthGatePassedAt\` when threshold is reached
+- [ ] Block \`/promote\` API if \`healthGateEnabled && healthGatePassedAt === null\`
+- [ ] Return a structured error: \`{ gate: 'health', status: 'pending', passes: N }\`
+- [ ] Expose \`GET /api/v1/environments/:id/gate/health\` status endpoint
+- [ ] Add health gate configuration fields to the gate config UI (Issue #9)`,
+              },
+              {
+                title: 'feat: Manual approval gate',
+                labels: ['enhancement', 'backend', 'frontend', 'ui'],
+                body: `## Overview
+
+Block promotion until a human explicitly **clicks Approve** in the dashboard. The environment detail page shows a pending promotion card with Approve/Reject buttons. Approved state (timestamp + actor) is stored in the database.
+
+## Why
+
+Some environments — especially production — require a human sign-off before a new version goes live. A manual gate provides an audit trail and ensures no automated process can bypass a required review step.
+
+## Implementation Tasks
+
+- [ ] Add approval gate fields to the \`Environment\` model:
+  - \`approvalGateEnabled\` (Boolean, default false)
+  - \`pendingApprovalSince\` (DateTime, nullable)
+  - \`approvedAt\` (DateTime, nullable)
+  - \`approvedBy\` (String, nullable — actor login)
+  - \`approvalStatus\` (Enum: NONE / PENDING / APPROVED / REJECTED)
+- [ ] Add \`POST /api/v1/environments/:id/approve\` and \`.../reject\` endpoints
+- [ ] Block \`/promote\` if \`approvalGateEnabled && approvalStatus !== APPROVED\`
+- [ ] Reset \`approvalStatus → PENDING\` when a new promotion is requested
+- [ ] Dashboard: show "Pending Approval" card on the environment detail page
+  - Approve button (green) and Reject button (red)
+  - Show actor and timestamp of last decision
+- [ ] Notify via webhook/Slack when a promotion enters PENDING state (see Issue #11)`,
+              },
+              {
+                title: 'feat: Soak gate',
+                labels: ['enhancement', 'backend', 'infrastructure'],
+                body: `## Overview
+
+After a successful deploy, require the environment to be **stable for a configurable duration** (e.g. 10 minutes) before auto-promotion triggers. Configuration: soak duration in minutes and stability criteria (no container restarts, health check passing).
+
+## Why
+
+A newly deployed version can appear healthy for a short period before revealing memory leaks, connection exhaustion, or other time-dependent failures. A soak period catches these issues before the build reaches the next environment.
+
+## Implementation Tasks
+
+- [ ] Add soak gate config fields to the \`Environment\` model:
+  - \`soakGateEnabled\` (Boolean, default false)
+  - \`soakDurationMinutes\` (Int, default 10)
+  - \`soakStartedAt\` (DateTime, nullable — set when deployment becomes ACTIVE)
+  - \`soakPassedAt\` (DateTime, nullable — set when soak completes)
+- [ ] Extend \`container-monitor.service.ts\` to track restarts during soak window
+- [ ] Create soak gate evaluation logic:
+  - Check \`soakStartedAt + soakDurationMinutes <= now\`
+  - Verify no container restarts during soak window
+  - Verify health check passes throughout (integrate with health gate)
+  - Set \`soakPassedAt\` when all conditions are met
+- [ ] Block \`/promote\` if \`soakGateEnabled && soakPassedAt === null\`
+- [ ] Return structured error: \`{ gate: 'soak', status: 'soaking', remainingMinutes: N }\`
+- [ ] Expose \`GET /api/v1/environments/:id/gate/soak\` status endpoint`,
+              },
+              {
+                title: 'feat: Custom webhook gate',
+                labels: ['enhancement', 'backend', 'security'],
+                body: `## Overview
+
+Call a **user-defined HTTP endpoint** before a promotion proceeds. If the endpoint returns HTTP 200, promotion continues. Any other status code or a timeout blocks promotion. Configuration: URL, timeout (seconds), and an optional secret header for authentication.
+
+## Why
+
+Teams often have external quality gates — test result APIs, compliance checkers, change management systems — that must approve a release. A generic webhook gate integrates VersionGate with any such system without requiring custom code.
+
+## Implementation Tasks
+
+- [ ] Add webhook gate config fields to the \`Environment\` model:
+  - \`webhookGateEnabled\` (Boolean, default false)
+  - \`webhookGateUrl\` (String, optional)
+  - \`webhookGateTimeout\` (Int, seconds, default 30)
+  - \`webhookGateSecret\` (String, optional — encrypted at rest)
+  - \`webhookGateLastStatus\` (Int, nullable — last HTTP status code)
+  - \`webhookGateLastCheckedAt\` (DateTime, nullable)
+- [ ] Create \`webhook-gate.service.ts\`:
+  - POST to \`webhookGateUrl\` with payload: \`{ project, environment, imageTag }\`
+  - Include \`X-VersionGate-Secret\` header if secret is configured
+  - Respect \`webhookGateTimeout\`
+  - Store response status and timestamp
+- [ ] Block \`/promote\` if \`webhookGateEnabled\` and last check did not return 200
+- [ ] Return structured error: \`{ gate: 'webhook', status: 'blocked', httpStatus: N }\`
+- [ ] Encrypt \`webhookGateSecret\` using AES-256 (\`src/utils/crypto.ts\`)
+- [ ] Expose \`POST /api/v1/environments/:id/gate/webhook/check\` to manually re-trigger`,
+              },
+              {
+                title: 'feat: Gate config UI',
+                labels: ['enhancement', 'frontend', 'ui'],
+                body: `## Overview
+
+Add a **per-environment settings panel** in the dashboard for enabling and configuring promotion gates. Each gate (health check, manual approval, soak, custom webhook) can be toggled on/off and its parameters set. Changes are saved to the Environment record via the API.
+
+## Why
+
+Gates are only useful if they are easy to configure. A dedicated UI panel lets operators adjust gate settings without editing database records or environment files directly.
+
+## Implementation Tasks
+
+- [ ] Create \`GateConfigPanel\` React component in \`dashboard/src/components/\`
+- [ ] Add a "Gates" tab to the environment detail page
+- [ ] Health check gate section:
+  - Toggle enable/disable
+  - Input: endpoint URL
+  - Input: polling interval (seconds)
+  - Input: required consecutive passes
+- [ ] Manual approval gate section:
+  - Toggle enable/disable
+- [ ] Soak gate section:
+  - Toggle enable/disable
+  - Input: soak duration (minutes)
+- [ ] Custom webhook gate section:
+  - Toggle enable/disable
+  - Input: webhook URL
+  - Input: timeout (seconds)
+  - Input: secret header value (masked)
+- [ ] Add \`PATCH /api/v1/projects/:id/environments/:envId\` backend endpoint for gate config
+- [ ] Show current gate status (passing/pending/blocked) inline with each gate toggle
+- [ ] Save button with optimistic UI update and error handling`,
+              },
+              {
+                title: 'feat: Promotion audit log',
+                labels: ['enhancement', 'backend', 'frontend', 'database'],
+                body: `## Overview
+
+Record every promotion event in the database: which environment, which image tag, which gates passed, timestamp, and actor (manual or automated). Display the audit log as a **timeline** on the environment detail page.
+
+## Why
+
+Compliance, debugging, and incident retrospectives all require a clear record of what was deployed when and by whom. An audit log is essential for regulated environments and for understanding the impact of promotions.
+
+## Implementation Tasks
+
+- [ ] Add \`PromotionAuditLog\` model to \`prisma/schema.prisma\`:
+  - \`id\`, \`environmentId\`, \`imageTag\`
+  - \`gatesPassed\` (JSON array of gate names)
+  - \`actor\` (String — login or "auto")
+  - \`outcome\` (Enum: SUCCESS / BLOCKED / REJECTED)
+  - \`createdAt\`
+- [ ] Write an audit log entry in \`deployment.service.ts\` on every promotion attempt
+- [ ] Add \`GET /api/v1/environments/:id/audit\` endpoint (paginated)
+- [ ] Create \`AuditTimeline\` React component:
+  - List events newest-first
+  - Show icon per outcome (✅ success, 🚫 blocked, ❌ rejected)
+  - Show gates passed, image tag, actor, and timestamp
+- [ ] Add "Audit Log" tab to the environment detail page
+- [ ] Implement pagination (load more) in the UI`,
+              },
+              {
+                title: 'feat: Notification hooks (deploy, gate, promotion events)',
+                labels: ['enhancement', 'backend', 'infrastructure'],
+                body: `## Overview
+
+Send a **webhook or Slack message** when key events occur: deploy success, deploy failure, gate block, and promotion. Configuration is per-project: webhook URL and the set of events to notify on.
+
+## Why
+
+Deployment events have immediate operational impact. Proactive notifications let teams react to failures before users are affected and provide visibility without requiring constant dashboard monitoring.
+
+## Implementation Tasks
+
+- [ ] Add notification config fields to the \`Project\` model:
+  - \`notifyWebhookUrl\` (String, optional)
+  - \`notifyEvents\` (JSON array: deploy_success, deploy_failure, gate_blocked, promotion)
+  - \`notifySlackWebhookUrl\` (String, optional)
+- [ ] Create \`notification.service.ts\`:
+  - \`notify(event, payload)\` — dispatches to configured destinations
+  - Generic webhook: POST JSON payload \`{ event, project, environment, imageTag, timestamp }\`
+  - Slack: POST Slack Block Kit message to \`notifySlackWebhookUrl\`
+  - Fire-and-forget with error logging (do not block deployment on notification failure)
+- [ ] Call \`notify()\` from \`deployment.service.ts\` at each relevant event
+- [ ] Add \`PATCH /api/v1/projects/:id/notifications\` endpoint
+- [ ] Add notification settings panel to project settings in the dashboard
+  - Input: generic webhook URL
+  - Input: Slack webhook URL
+  - Checkboxes: which events to subscribe to
+- [ ] Mask stored webhook URLs in API responses (show only last 8 chars)`,
+              },
+              {
+                title: 'feat: GitHub App integration',
+                labels: ['enhancement', 'security', 'infrastructure', 'backend', 'frontend'],
+                body: `## Overview
+
+Replace the current **manual webhook URL setup** with a proper **GitHub App**. The app requests repo access, automatically installs webhooks on connected repositories, and handles webhook signature verification natively. This removes the manual step of copying webhook URLs into GitHub and improves security.
+
+## Why
+
+The current approach requires users to manually copy a secret webhook URL into GitHub repository settings. This is error-prone, insecure (secrets in URLs), and breaks when projects are deleted or secrets rotate. A GitHub App provides OAuth-based repo access, managed webhook lifecycle, and cryptographic signature verification.
+
+## Implementation Tasks
+
+- [ ] Register a GitHub App (document setup steps in \`docs/github-app-setup.md\`)
+  - Permissions: repository webhooks (read/write), contents (read), metadata (read)
+  - Webhook events: push
+- [ ] Store GitHub App credentials in \`.env\`: \`GITHUB_APP_ID\`, \`GITHUB_APP_PRIVATE_KEY\`, \`GITHUB_CLIENT_ID\`, \`GITHUB_CLIENT_SECRET\`
+- [ ] Implement OAuth flow:
+  - \`GET /api/v1/auth/github\` → redirect to GitHub OAuth
+  - \`GET /api/v1/auth/github/callback\` → exchange code for token, store installation
+- [ ] Add \`GitHubInstallation\` model to Prisma schema:
+  - \`installationId\`, \`accountLogin\`, \`accessToken\` (encrypted), \`expiresAt\`
+- [ ] Webhook lifecycle management:
+  - On project create: use GitHub API to install webhook on selected repo
+  - On project delete: remove webhook from GitHub
+  - Verify \`X-Hub-Signature-256\` header using the App's webhook secret (not per-project URL secret)
+- [ ] Replace \`webhookSecret\` URL-based routing with signature-verified shared endpoint \`POST /api/v1/webhooks/github\`
+- [ ] Dashboard — repo selection UI:
+  - OAuth "Connect GitHub Account" button
+  - List accessible repos after OAuth
+  - Select repo when creating a project (auto-populates \`repoUrl\`)
+- [ ] Remove \`webhookSecret\` field from \`Project\` model (or mark deprecated)`,
+              },
+            ];
+
+            for (const [index, issue] of issues.entries()) {
+              if (dryRun) {
+                console.log(`[DRY RUN] Would create issue ${index + 1}: ${issue.title}`);
+                console.log(`  Labels: ${issue.labels.join(', ')}`);
+                continue;
+              }
+              try {
+                const created = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: issue.title,
+                  body: issue.body,
+                  labels: issue.labels,
+                });
+                console.log(`Created issue #${created.data.number}: ${issue.title}`);
+                console.log(`  URL: ${created.data.html_url}`);
+                // Small delay to avoid rate limiting
+                await new Promise(r => setTimeout(r, 1000));
+              } catch (e) {
+                console.error(`Error creating issue ${index + 1} (${issue.title}):`, e.message);
+              }
+            }
