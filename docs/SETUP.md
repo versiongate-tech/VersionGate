@@ -57,7 +57,7 @@ Fill in:
 Click **Apply & Start Engine**. The wizard will:
 
 1. Write `.env` to the repo root
-2. Run `bunx prisma db push` (creates the schema)
+2. Run `bunx prisma migrate deploy` (applies versioned migrations; falls back to `db push` for legacy databases)
 3. Write an Nginx reverse-proxy config and reload Nginx
 4. Restart the engine via PM2 (autorestart)
 5. Redirect you to `http://your-domain`
@@ -78,6 +78,7 @@ Click **Apply & Start Engine**. The wizard will:
 | `GEMINI_API_KEY` | No | — | Google AI Studio key for CI pipeline generation |
 | `GEMINI_MODEL` | No | `gemini-2.5-pro` | Gemini model ID |
 | `LOG_LEVEL` | No | `info` | Pino log level (`trace` `debug` `info` `warn` `error`) |
+| `PRISMA_SCHEMA_SYNC` | No | `migrate` | `migrate` = `prisma migrate deploy` (with `db push` fallback on failure); `push` = `db push` only (legacy / dev) |
 
 ---
 

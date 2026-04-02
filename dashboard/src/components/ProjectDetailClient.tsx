@@ -647,7 +647,7 @@ export function ProjectDetailClient() {
               </>
             ) : (
               <p className="text-xs text-zinc-600 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2">
-                No webhook secret — run <code className="text-zinc-500">bunx prisma db push</code> then restart the engine.
+                No webhook secret — run <code className="text-zinc-500">bunx prisma migrate deploy</code> then restart the engine.
               </p>
             )}
           </div>

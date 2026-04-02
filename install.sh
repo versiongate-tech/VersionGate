@@ -198,8 +198,14 @@ fi
 success ".env written."
 
 # ─── Run Prisma migrations ─────────────────────────────────────────────────────
-info "Running database migrations (prisma db push)…"
-cd "$INSTALL_DIR" && bunx prisma db push --accept-data-loss
+# Prefer versioned migrations (prisma migrate deploy); fall back to db push for legacy DBs.
+if [[ "${PRISMA_SCHEMA_SYNC:-migrate}" == "push" ]]; then
+  info "Running database schema sync (PRISMA_SCHEMA_SYNC=push, prisma db push)…"
+  cd "$INSTALL_DIR" && bunx prisma db push --accept-data-loss
+else
+  info "Running database migrations (prisma migrate deploy, with db push fallback)…"
+  cd "$INSTALL_DIR" && (bunx prisma migrate deploy || bunx prisma db push --accept-data-loss)
+fi
 
 # ─── Create directories ────────────────────────────────────────────────────────
 info "Creating runtime directories…"

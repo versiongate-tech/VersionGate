@@ -70,7 +70,7 @@ The setup wizard will then:
 - Set `PROJECTS_ROOT_PATH`
 - Generate and persist `ENCRYPTION_KEY`
 - Run `bunx prisma generate`
-- Run `bunx prisma db push --accept-data-loss`
+- Run `bunx prisma migrate deploy` (falls back to `db push` only if the database has no migration history)
 - Write and reload Nginx config when permissions allow
 
 After setup finishes, open the dashboard and start adding projects.

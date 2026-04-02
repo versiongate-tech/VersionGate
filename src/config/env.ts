@@ -7,10 +7,16 @@ function optionalEnv(key: string, fallback: string): string {
   return process.env[key] ?? fallback;
 }
 
+const prismaSchemaSyncRaw = optionalEnv("PRISMA_SCHEMA_SYNC", "migrate").toLowerCase();
+const prismaSchemaSync: "migrate" | "push" =
+  prismaSchemaSyncRaw === "push" ? "push" : "migrate";
+
 export const config = {
   port: parseInt(optionalEnv("PORT", "9090"), 10) || 9090,
   logLevel: optionalEnv("LOG_LEVEL", "info"),
   databaseUrl: optionalEnv("DATABASE_URL", ""),
+  /** migrate: `prisma migrate deploy` (with db push fallback); push: `prisma db push` only */
+  prismaSchemaSync,
   dockerNetwork: optionalEnv("DOCKER_NETWORK", "versiongate-net"),
   nginxConfigPath: optionalEnv("NGINX_CONFIG_PATH", "/etc/nginx/conf.d/upstream.conf"),
   projectsRootPath: optionalEnv("PROJECTS_ROOT_PATH", "/var/versiongate/projects"),

@@ -9,6 +9,7 @@
     "start": "bun src/server.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"

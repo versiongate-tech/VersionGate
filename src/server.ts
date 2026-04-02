@@ -1,6 +1,7 @@
 import { buildApp } from "./app";
 import { config } from "./config/env";
 import { logger } from "./utils/logger";
+import { runPrismaSchemaSync } from "./utils/prisma-schema-sync";
 import prisma from "./prisma/client";
 import { ReconciliationService } from "./services/reconciliation.service";
 import { ContainerMonitorService } from "./services/container-monitor.service";
@@ -29,6 +30,15 @@ async function start(): Promise<void> {
     // Run reconciliation before accepting requests — cleans up any crashed deploys
     // Skip if database is not configured (setup wizard not completed yet)
     if (config.databaseUrl) {
+      try {
+        logger.info("Applying database migrations…");
+        runPrismaSchemaSync({ mode: config.prismaSchemaSync });
+      } catch (err) {
+        logger.fatal({ err }, "Database migration failed — check DATABASE_URL and migration files");
+        await prisma.$disconnect();
+        process.exit(1);
+      }
+
       try {
         const reconciliation = new ReconciliationService();
         const report = await reconciliation.reconcile();

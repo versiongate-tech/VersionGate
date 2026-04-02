@@ -4,6 +4,7 @@ import { execSync } from "child_process";
 import { randomBytes } from "crypto";
 import { logger } from "../utils/logger";
 import { envFilePath, projectRoot } from "../utils/paths";
+import { runPrismaSchemaSync } from "../utils/prisma-schema-sync";
 
 interface SetupApplyBody {
   domain: string;
@@ -136,12 +137,12 @@ ENCRYPTION_KEY="${encryptionKey}"
   }
 
   logger.info("Setup: running database migrations…");
+  const setupEnv = { ...process.env, DATABASE_URL: databaseUrl, ENCRYPTION_KEY: encryptionKey };
   try {
-    execSync("bunx prisma db push --accept-data-loss", {
+    runPrismaSchemaSync({
       cwd: projectRoot,
-      env: { ...process.env, DATABASE_URL: databaseUrl, ENCRYPTION_KEY: encryptionKey },
-      stdio: "pipe",
-      timeout: 60_000,
+      env: setupEnv,
+      timeoutMs: 120_000,
     });
     logger.info("Setup: database migrations complete");
   } catch (err: unknown) {
