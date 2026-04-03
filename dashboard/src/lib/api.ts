@@ -163,6 +163,23 @@ export function getJobStatus(jobId: string): Promise<{ job: JobRecord }> {
   return request("GET", `/jobs/${jobId}`);
 }
 
+export interface SetupStatus {
+  configured: boolean;
+  dbConnected: boolean;
+}
+
+export function getSetupStatus(): Promise<SetupStatus> {
+  return request("GET", "/setup/status");
+}
+
+export function applySetup(data: {
+  domain: string;
+  databaseUrl: string;
+  geminiApiKey?: string;
+}): Promise<{ configured: boolean }> {
+  return request("POST", "/setup/apply", data);
+}
+
 export function createWebSocket(jobId: string): WebSocket {
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;
   if (envUrl && /^https?:\/\//i.test(envUrl)) {
