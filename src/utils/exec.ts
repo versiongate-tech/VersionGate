@@ -1,4 +1,4 @@
-import { exec, execFile } from "child_process";
+import { exec, execFile, type ExecFileOptions } from "child_process";
 import { promisify } from "util";
 
 const execPromise = promisify(exec);
@@ -28,9 +28,17 @@ export async function execAsync(command: string): Promise<ExecResult> {
  * Arguments are passed as an array — no shell expansion, no injection risk.
  * maxBuffer raised to 50 MB to handle large Docker build output.
  */
-export async function execFileAsync(cmd: string, args: string[]): Promise<ExecResult> {
+export async function execFileAsync(
+  cmd: string,
+  args: string[],
+  extra?: Pick<ExecFileOptions, "env">
+): Promise<ExecResult> {
   try {
-    const { stdout, stderr } = await execFilePromise(cmd, args, { maxBuffer: 50 * 1024 * 1024 });
+    const opts: ExecFileOptions = { maxBuffer: 50 * 1024 * 1024 };
+    if (extra?.env) {
+      opts.env = { ...process.env, ...extra.env };
+    }
+    const { stdout, stderr } = await execFilePromise(cmd, args, opts);
     return { stdout: stdout.toString(), stderr: stderr.toString() };
   } catch (err: unknown) {
     // execFile errors carry .stdout/.stderr with the actual output — include both

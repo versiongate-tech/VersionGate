@@ -6,7 +6,10 @@ import { logger } from "./logger";
  */
 export async function buildImage(imageTag: string, contextPath: string): Promise<void> {
   logger.info({ imageTag, contextPath }, "Building Docker image");
-  await execFileAsync("docker", ["build", "-t", imageTag, contextPath]);
+  // BuildKit enables Dockerfile # syntax= and RUN --mount=type=cache (smaller layers, less host disk churn).
+  await execFileAsync("docker", ["build", "-t", imageTag, contextPath], {
+    env: { DOCKER_BUILDKIT: "1", BUILDKIT_PROGRESS: "plain" },
+  });
 }
 
 /**
