@@ -2,7 +2,6 @@ import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 
 import { cn } from "@/lib/utils"
-import { ChevronRightIcon, CheckIcon } from "lucide-react"
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -117,7 +116,9 @@ function DropdownMenuSubTrigger({
       {...props}
     >
       {children}
-      <ChevronRightIcon className="ml-auto" />
+      <span className="ml-auto text-xs text-muted-foreground" aria-hidden>
+        ›
+      </span>
     </MenuPrimitive.SubmenuTrigger>
   )
 }
@@ -168,8 +169,9 @@ function DropdownMenuCheckboxItem({
         data-slot="dropdown-menu-checkbox-item-indicator"
       >
         <MenuPrimitive.CheckboxItemIndicator>
-          <CheckIcon
-          />
+          <span className="text-xs font-semibold" aria-hidden>
+            ✓
+          </span>
         </MenuPrimitive.CheckboxItemIndicator>
       </span>
       {children}
@@ -209,8 +211,9 @@ function DropdownMenuRadioItem({
         data-slot="dropdown-menu-radio-item-indicator"
       >
         <MenuPrimitive.RadioItemIndicator>
-          <CheckIcon
-          />
+          <span className="text-xs font-semibold" aria-hidden>
+            ✓
+          </span>
         </MenuPrimitive.RadioItemIndicator>
       </span>
       {children}

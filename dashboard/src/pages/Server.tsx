@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Activity, Cpu, Gauge, HardDrive, Network, Timer } from "lucide-react";
 import { getServerStats, type ServerStats } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -51,14 +50,13 @@ export function Server() {
     <div className="w-full space-y-8">
       <PageHeader
         title="Host metrics"
-        description="CPU, memory, and disk for the machine running VersionGate. Refreshes every 5 seconds."
+        description="CPU, memory, disk, and network for the machine running Docker and the VersionGate API. Values refresh every five seconds. Low free disk space will cause image builds and npm installs to fail with ENOSPC."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">CPU</CardTitle>
-            <Cpu className="size-4 text-primary/80" />
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="text-3xl font-semibold tabular-nums">{stats.cpu_percent.toFixed(1)}%</div>
@@ -66,9 +64,8 @@ export function Server() {
           </CardContent>
         </Card>
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Memory</CardTitle>
-            <HardDrive className="size-4 text-primary/80" />
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="text-3xl font-semibold tabular-nums">{stats.memory_percent.toFixed(1)}%</div>
@@ -79,9 +76,8 @@ export function Server() {
           </CardContent>
         </Card>
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Disk</CardTitle>
-            <HardDrive className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="text-3xl font-semibold tabular-nums">{stats.disk_percent.toFixed(1)}%</div>
@@ -92,9 +88,8 @@ export function Server() {
           </CardContent>
         </Card>
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Network</CardTitle>
-            <Network className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <div>
@@ -109,11 +104,8 @@ export function Server() {
 
       <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Gauge className="size-4 text-primary/80" />
-            System
-          </CardTitle>
-          <CardDescription>Load averages (1 / 5 / 15 min) and process count.</CardDescription>
+          <CardTitle className="text-base">System</CardTitle>
+          <CardDescription>Load averages (1, 5, and 15 minutes) and running process count.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-1">
@@ -125,13 +117,11 @@ export function Server() {
             <p className="font-mono text-lg tabular-nums">{stats.process_count}</p>
           </div>
           <Separator className="sm:col-span-2" />
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground sm:col-span-2">
-            <span className="inline-flex items-center gap-1.5">
-              <Activity className="size-3.5" />
-              Status: <span className="font-mono text-foreground">{stats.status}</span>
+          <div className="flex flex-wrap gap-6 text-sm text-muted-foreground sm:col-span-2">
+            <span>
+              Collector status: <span className="font-mono text-foreground">{stats.status}</span>
             </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Timer className="size-3.5" />
+            <span>
               Uptime: <span className="font-mono text-foreground">{Math.floor(stats.uptime)}s</span>
             </span>
           </div>

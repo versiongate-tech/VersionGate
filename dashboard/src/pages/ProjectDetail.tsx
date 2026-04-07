@@ -1,20 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft,
-  Clock,
-  Copy,
-  ExternalLink,
-  GitBranch,
-  Globe,
-  Layers,
-  Rocket,
-  RotateCcw,
-  ScrollText,
-  Server,
-  Settings2,
-} from "lucide-react";
-import {
   getDeployments,
   getProject,
   listProjectJobs,
@@ -138,147 +124,102 @@ export function ProjectDetail() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Back + header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Link
             to="/"
-            className="mt-1 inline-flex size-9 items-center justify-center rounded-lg border border-border/50 bg-card/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="mt-1 inline-flex min-w-[2.25rem] items-center justify-center rounded-lg border border-border/50 bg-card/60 px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            <ArrowLeft className="size-4" />
+            Back
           </Link>
           <div className="min-w-0">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
               <StatusBadge status={displayStatus} />
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
               <a
                 href={project.repoUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 font-mono text-xs hover:text-primary transition-colors"
+                className="block font-mono text-xs text-primary hover:underline"
               >
-                <GitBranch className="size-3" />
-                {project.repoUrl.replace(/^https?:\/\/(www\.)?/, "")}
-                <ExternalLink className="size-3 opacity-50" />
+                {project.repoUrl.replace(/^https?:\/\/(www\.)?/, "")} (open in new tab)
               </a>
-              <span className="text-border">·</span>
-              <span className="flex items-center gap-1 font-mono text-xs">
-                <code className="rounded bg-muted/50 px-1.5 py-0.5">{project.branch}</code>
-              </span>
+              <p className="font-mono text-xs">
+                Branch <code className="rounded bg-muted/50 px-1.5 py-0.5">{project.branch}</code>
+              </p>
             </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void onDeploy()} className="gap-2 shadow-lg shadow-primary/10">
-            <Rocket className="size-4" />
+          <Button onClick={() => void onDeploy()} className="shadow-lg shadow-primary/10">
             Deploy
           </Button>
-          <Button variant="secondary" onClick={() => void onRollback()} className="gap-2">
-            <RotateCcw className="size-4" />
+          <Button variant="secondary" onClick={() => void onRollback()}>
             Rollback
           </Button>
         </div>
       </div>
 
-      {/* Info cards row */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
-          <CardContent className="flex items-center gap-3 py-4">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-              <Globe className="size-4 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Live URL</p>
-              {liveUrl ? (
-                <a
-                  href={liveUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="truncate font-mono text-sm text-primary hover:underline"
-                >
-                  {liveUrl.replace(/^https?:\/\//, "")}
-                </a>
-              ) : (
-                <span className="text-sm text-muted-foreground/60">Not deployed</span>
-              )}
-            </div>
+          <CardContent className="py-4">
+            <p className="text-xs text-muted-foreground">Live URL</p>
+            {liveUrl ? (
+              <a href={liveUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate font-mono text-sm text-primary hover:underline">
+                {liveUrl.replace(/^https?:\/\//, "")}
+              </a>
+            ) : (
+              <span className="mt-1 block text-sm text-muted-foreground/60">Not deployed</span>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
-          <CardContent className="flex items-center gap-3 py-4">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-cyan-500/10">
-              <Server className="size-4 text-cyan-400" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">App port</p>
-              <p className="font-mono text-sm tabular-nums">{project.appPort}</p>
-            </div>
+          <CardContent className="py-4">
+            <p className="text-xs text-muted-foreground">App port (container)</p>
+            <p className="mt-1 font-mono text-sm tabular-nums">{project.appPort}</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
-          <CardContent className="flex items-center gap-3 py-4">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-500/10">
-              <Layers className="size-4 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total deploys</p>
-              <p className="text-sm font-semibold tabular-nums">{totalDeploys}</p>
-            </div>
+          <CardContent className="py-4">
+            <p className="text-xs text-muted-foreground">Total deploys</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums">{totalDeploys}</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
-          <CardContent className="flex items-center gap-3 py-4">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-amber-500/10">
-              <Clock className="size-4 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Last deploy</p>
-              <p className="text-sm">{lastDeploy ? timeAgo(lastDeploy.createdAt) : "Never"}</p>
-            </div>
+          <CardContent className="py-4">
+            <p className="text-xs text-muted-foreground">Last deploy</p>
+            <p className="mt-1 text-sm">{lastDeploy ? timeAgo(lastDeploy.createdAt) : "Never"}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Blue/green traffic */}
       <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <CardTitle>Traffic slots</CardTitle>
-          </div>
+          <CardTitle>Traffic slots</CardTitle>
           <CardDescription>
-            Blue <span className="font-mono">{project.basePort}</span> · Green{" "}
-            <span className="font-mono">{project.basePort + 1}</span> — traffic follows the{" "}
-            <span className="font-medium text-foreground">ACTIVE</span> slot
+            Blue uses host port <span className="font-mono">{project.basePort}</span>, green uses{" "}
+            <span className="font-mono">{project.basePort + 1}</span>. Public traffic follows whichever deployment is{" "}
+            <span className="font-medium text-foreground">ACTIVE</span>.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <SlotBadge color="BLUE" />
-              {active?.color === "BLUE" && (
-                <Badge className="bg-emerald-600/90 text-white hover:bg-emerald-600">LIVE</Badge>
-              )}
+              {active?.color === "BLUE" && <Badge className="bg-emerald-600/90 text-white hover:bg-emerald-600">LIVE</Badge>}
             </div>
             <p className="font-mono text-sm text-foreground">{blueUrl?.replace(/^https?:\/\//, "")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => blueUrl && copyText(blueUrl, "URL")}
-              >
-                <Copy className="mr-1 size-3" />
-                Copy
+              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => blueUrl && copyText(blueUrl, "URL")}>
+                Copy URL
               </Button>
               {blueUrl && (
                 <a href={blueUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "secondary", size: "sm", className: "h-7 text-xs" })}>
-                  <ExternalLink className="mr-1 size-3" />
                   Open
                 </a>
               )}
@@ -287,25 +228,15 @@ export function ProjectDetail() {
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <SlotBadge color="GREEN" />
-              {active?.color === "GREEN" && (
-                <Badge className="bg-emerald-600/90 text-white hover:bg-emerald-600">LIVE</Badge>
-              )}
+              {active?.color === "GREEN" && <Badge className="bg-emerald-600/90 text-white hover:bg-emerald-600">LIVE</Badge>}
             </div>
             <p className="font-mono text-sm text-foreground">{greenUrl?.replace(/^https?:\/\//, "")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => greenUrl && copyText(greenUrl, "URL")}
-              >
-                <Copy className="mr-1 size-3" />
-                Copy
+              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => greenUrl && copyText(greenUrl, "URL")}>
+                Copy URL
               </Button>
               {greenUrl && (
                 <a href={greenUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "secondary", size: "sm", className: "h-7 text-xs" })}>
-                  <ExternalLink className="mr-1 size-3" />
                   Open
                 </a>
               )}
@@ -315,21 +246,18 @@ export function ProjectDetail() {
         {liveUrl && active && (
           <CardContent className="border-t border-border/40 pt-4">
             <p className="text-sm text-muted-foreground">
-              Current traffic: <SlotBadge color={active.color} /> →{" "}
-              <span className="font-mono text-foreground">{liveUrl}</span> (host{" "}
-              <span className="font-mono">{liveHostPort}</span> → container <span className="font-mono">{project.appPort}</span>)
+              Current traffic: <SlotBadge color={active.color} /> pointing to{" "}
+              <span className="font-mono text-foreground">{liveUrl}</span> (host port{" "}
+              <span className="font-mono">{liveHostPort}</span> mapped to container port{" "}
+              <span className="font-mono">{project.appPort}</span>).
             </p>
           </CardContent>
         )}
       </Card>
 
-      {/* Quick checks */}
       <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Settings2 className="size-4 text-muted-foreground" />
-            <CardTitle className="text-base">Configuration</CardTitle>
-          </div>
+          <CardTitle className="text-base">Configuration</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -346,7 +274,7 @@ export function ProjectDetail() {
               </p>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground">Base port range</span>
+              <span className="text-xs text-muted-foreground">Host port range</span>
               <p className="mt-0.5 font-mono text-sm">
                 <code className="rounded bg-muted/50 px-1.5 py-0.5">
                   {project.basePort}–{project.basePort + 1}
@@ -357,11 +285,10 @@ export function ProjectDetail() {
         </CardContent>
       </Card>
 
-      {/* Jobs */}
       <Card className="border-border/50 bg-card/50 ring-1 ring-border/30">
         <CardHeader>
           <CardTitle>Jobs</CardTitle>
-          <CardDescription>Deploy and rollback runs — open logs for full output.</CardDescription>
+          <CardDescription>Deploy and rollback runs. Open a row for streamed logs.</CardDescription>
         </CardHeader>
         <CardContent className="px-0">
           <Table>
@@ -389,15 +316,9 @@ export function ProjectDetail() {
                         {job.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {job.startedAt ? timeAgo(job.startedAt) : "—"}
-                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{job.startedAt ? timeAgo(job.startedAt) : "—"}</TableCell>
                     <TableCell className="pr-6 text-right">
-                      <Link
-                        to={`/projects/${project.id}/deploy/${job.id}`}
-                        className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1" })}
-                      >
-                        <ScrollText className="size-3.5" />
+                      <Link to={`/projects/${project.id}/deploy/${job.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
                         View log
                       </Link>
                     </TableCell>
@@ -409,11 +330,10 @@ export function ProjectDetail() {
         </CardContent>
       </Card>
 
-      {/* Deployments */}
       <Card className="border-border/50 bg-card/50 ring-1 ring-border/30">
         <CardHeader>
           <CardTitle>Deployments</CardTitle>
-          <CardDescription>Each row is one version. Host port is what you open in the browser for that slot.</CardDescription>
+          <CardDescription>Each row is one version. The host port is what you open in the browser for that color slot.</CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto px-0">
           <Table>
@@ -473,8 +393,7 @@ export function ProjectDetail() {
       </Card>
 
       <Separator className="opacity-40" />
-      <Link to="/" className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground gap-1" })}>
-        <ArrowLeft className="size-3.5" />
+      <Link to="/" className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })}>
         Back to overview
       </Link>
     </div>

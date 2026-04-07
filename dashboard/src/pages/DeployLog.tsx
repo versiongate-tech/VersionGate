@@ -7,15 +7,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  ClipboardCopy,
-  Download,
-  ListOrdered,
-  ScrollText,
-} from "lucide-react";
 import { toast } from "sonner";
 
 type LineKind = "info" | "success" | "error" | "step";
@@ -24,7 +15,7 @@ function classifyLine(line: string): LineKind {
   const lower = line.toLowerCase();
   if (/^step \d+/i.test(line.trim()) || /^\[.*\]/.test(line.trim())) return "step";
   if (lower.includes("failed") || lower.includes("error") || lower.includes("fatal")) return "error";
-  if (lower.includes("successful") || lower.includes("complete") || lower.includes("✓")) return "success";
+  if (lower.includes("successful") || lower.includes("complete") || lower.includes("done")) return "success";
   return "info";
 }
 
@@ -179,14 +170,14 @@ export function DeployLog() {
           {projectId && (
             <Link
               to={`/projects/${projectId}`}
-              className="inline-flex size-9 items-center justify-center rounded-lg border border-border/50 bg-card/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex min-w-[2.25rem] items-center justify-center rounded-lg border border-border/50 bg-card/60 px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              <ArrowLeft className="size-4" />
+              Back
             </Link>
           )}
           <PageHeader
             title="Deploy log"
-            description={`Streaming build output ${jobId ? `· ${jobId.slice(0, 8)}…` : ""}`}
+            description={`Streaming build output${jobId ? ` — job id prefix ${jobId.slice(0, 8)}` : ""}`}
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -204,7 +195,6 @@ export function DeployLog() {
 
       {showWorkerHint && (
         <Alert className="border-amber-500/40 bg-amber-500/10">
-          <AlertTriangle className="size-4 text-amber-400" />
           <AlertTitle>Job still queued</AlertTitle>
           <AlertDescription>
             Nothing has started yet. On the server run{" "}
@@ -217,52 +207,47 @@ export function DeployLog() {
       {jobError && (
         <Alert variant="destructive">
           <AlertTitle>Job error</AlertTitle>
-          <AlertDescription className="font-mono text-xs whitespace-pre-wrap">{jobError}</AlertDescription>
+          <AlertDescription className="whitespace-pre-wrap font-mono text-xs">{jobError}</AlertDescription>
         </Alert>
       )}
 
       <Card className="overflow-hidden border-border/50 bg-card/40 ring-1 ring-border/30">
-        <CardHeader className="flex flex-row items-center justify-between border-b border-border/40 py-3">
-          <CardTitle className="flex items-center gap-2 font-mono text-xs font-normal uppercase tracking-wider text-muted-foreground">
-            <ScrollText className="size-3.5" />
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/40 py-3">
+          <CardTitle className="font-mono text-xs font-normal uppercase tracking-wider text-muted-foreground">
             Output
             {lines.length > 0 && (
-              <span className="text-[10px] tabular-nums text-muted-foreground/60">
-                {lines.length} lines
-              </span>
+              <span className="ml-2 text-[10px] tabular-nums text-muted-foreground/60">{lines.length} lines</span>
             )}
           </CardTitle>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => setShowLineNumbers(!showLineNumbers)}
               title="Toggle line numbers"
             >
-              <ListOrdered className="size-3.5" />
+              {showLineNumbers ? "Hide lines" : "Line numbers"}
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={copyLogs}
               disabled={lines.length === 0}
               title="Copy logs"
             >
-              {copied ? <Check className="size-3.5 text-emerald-400" /> : <ClipboardCopy className="size-3.5" />}
-              <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
+              {copied ? "Copied" : "Copy"}
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={downloadLogs}
               disabled={lines.length === 0}
               title="Download logs"
             >
-              <Download className="size-3.5" />
-              <span className="hidden sm:inline">Download</span>
+              Download
             </Button>
           </div>
         </CardHeader>
@@ -289,7 +274,7 @@ export function DeployLog() {
                     "group/line flex hover:bg-white/[0.02]",
                     kind === "success" && "text-emerald-400",
                     kind === "error" && "text-red-400",
-                    kind === "step" && "text-cyan-300 font-medium mt-1",
+                    kind === "step" && "mt-1 font-medium text-cyan-300",
                     kind === "info" && "text-zinc-300"
                   )}
                 >
@@ -308,12 +293,12 @@ export function DeployLog() {
       </Card>
 
       {projectId && (
-        <div className="flex flex-wrap gap-3 text-sm">
-          <Link to={`/projects/${projectId}`} className="text-muted-foreground hover:text-primary transition-colors">
-            ← Project
+        <div className="flex flex-wrap gap-4 text-sm">
+          <Link to={`/projects/${projectId}`} className="text-muted-foreground transition-colors hover:text-primary">
+            Project detail
           </Link>
-          <Link to="/activity" className="text-muted-foreground hover:text-primary transition-colors">
-            All activity →
+          <Link to="/activity" className="text-muted-foreground transition-colors hover:text-primary">
+            All activity
           </Link>
         </div>
       )}

@@ -171,6 +171,26 @@ export function getSetupStatus(): Promise<SetupStatus> {
   return request("GET", "/setup/status");
 }
 
+export interface InstanceSettings {
+  engineVersion: string;
+  nodeEnv: string;
+  apiPort: number;
+  dockerNetwork: string;
+  projectsRootPath: string;
+  nginxConfigPath: string;
+  prismaSchemaSync: "migrate" | "push";
+  databaseUrlInEnvFile: boolean;
+  databaseUrlLoaded: boolean;
+  databaseReachable: boolean;
+  needsRestart: boolean;
+  encryptionKeyConfigured: boolean;
+  geminiConfigured: boolean;
+}
+
+export function getInstanceSettings(): Promise<InstanceSettings> {
+  return request("GET", "/settings/instance");
+}
+
 export function applySetup(body: {
   domain: string;
   databaseUrl: string;

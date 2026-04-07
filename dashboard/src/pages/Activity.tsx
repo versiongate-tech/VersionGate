@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { RefreshCw, ScrollText } from "lucide-react";
 import { listAllJobs, type JobRecord } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,10 +44,9 @@ export function Activity() {
     <div className="w-full space-y-8">
       <PageHeader
         title="Activity"
-        description="Central log of deploy and rollback jobs across all projects. Refreshes every few seconds."
+        description="Deploy and rollback jobs across all projects, newest first. If jobs stay pending, confirm the worker process is running on the host."
         actions={
-          <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => void load()}>
-            <RefreshCw className="size-3.5" />
+          <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
             Refresh
           </Button>
         }
@@ -58,10 +56,9 @@ export function Activity() {
         <CardHeader className="border-b border-border/40">
           <CardTitle>Jobs</CardTitle>
           <CardDescription>
-            Open any row to stream logs. If a job stays <span className="font-mono">PENDING</span>, ensure the worker
-            process is running (
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">pm2 list</code> →{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">versiongate-worker</code>).
+            Open a row to stream logs. Pending work requires{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">versiongate-worker</code> (see{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">pm2 list</code> on the server).
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0 pt-4">
@@ -86,7 +83,7 @@ export function Activity() {
                 {jobs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="py-16 text-center text-muted-foreground">
-                      No jobs yet. Deploy a project from the Deployments page.
+                      No jobs yet. Deploy a project from its detail page.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -113,9 +110,8 @@ export function Activity() {
                       <TableCell className="pr-6 text-right">
                         <Link
                           to={`/projects/${job.projectId}/deploy/${job.id}`}
-                          className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1" })}
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
                         >
-                          <ScrollText className="size-3.5" />
                           Open log
                         </Link>
                       </TableCell>

@@ -16,16 +16,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  Box,
-  ChevronRight,
-  Globe,
-  LayoutDashboard,
-  Plus,
-  ScrollText,
-  Server,
-  Settings,
-} from "lucide-react";
 import { useEffect, useState } from "react";
 import { getProjects, getServerStats, getSetupStatus, type Project } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -33,14 +23,14 @@ import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { CreateProjectLaunchContext } from "@/create-project-launch";
 
 const nav = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/activity", label: "Activity", icon: ScrollText, end: false },
-  { to: "/server", label: "Host metrics", icon: Server, end: false },
-  { to: "/settings", label: "Settings", icon: Settings, end: false },
-];
+  { to: "/", label: "Overview", end: true },
+  { to: "/activity", label: "Activity", end: false },
+  { to: "/server", label: "Host metrics", end: false },
+  { to: "/settings", label: "Settings", end: false },
+] as const;
 
 const navBtn =
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm text-sidebar-foreground ring-sidebar-ring outline-hidden transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate";
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm text-sidebar-foreground ring-sidebar-ring outline-hidden transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground [&>span:last-child]:truncate";
 
 export function Layout() {
   const navigate = useNavigate();
@@ -113,12 +103,10 @@ export function Layout() {
               <div className="flex items-center gap-2 px-2 py-1">
                 <SidebarTrigger className="-ml-1" />
                 <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-                  <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10">
-                    <Globe className="size-4 text-primary" />
+                  <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-xs font-semibold text-primary">
+                    VG
                   </div>
-                  <span className="font-semibold tracking-tight text-foreground">
-                    VersionGate
-                  </span>
+                  <span className="font-semibold tracking-tight text-foreground">VersionGate</span>
                 </div>
               </div>
             </SidebarHeader>
@@ -140,14 +128,12 @@ export function Layout() {
                             )
                           }
                         >
-                          <item.icon />
                           <span>{item.label}</span>
                         </NavLink>
                       </SidebarMenuItem>
                     ))}
                     <SidebarMenuItem>
                       <button type="button" className={navBtn} onClick={() => setCreateProjectOpen(true)}>
-                        <Plus />
                         <span>New project</span>
                       </button>
                     </SidebarMenuItem>
@@ -155,7 +141,6 @@ export function Layout() {
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              {/* Project quick-nav */}
               {projects.length > 0 && (
                 <SidebarGroup>
                   <SidebarGroupLabel>Projects</SidebarGroupLabel>
@@ -168,14 +153,12 @@ export function Layout() {
                             className={({ isActive }) =>
                               cn(
                                 navBtn,
-                                isActive &&
-                                  "bg-sidebar-accent font-medium text-sidebar-primary"
+                                isActive && "bg-sidebar-accent font-medium text-sidebar-primary"
                               )
                             }
                           >
-                            <Box className="size-4 shrink-0" />
                             <span className="truncate">{p.name}</span>
-                            <ChevronRight className="ml-auto size-3 opacity-40" />
+                            <span className="ml-auto text-[10px] uppercase text-muted-foreground">Open</span>
                           </NavLink>
                         </SidebarMenuItem>
                       ))}
@@ -186,7 +169,7 @@ export function Layout() {
             </SidebarContent>
             <SidebarRail />
           </Sidebar>
-          <SidebarInset className="bg-background min-h-svh">
+          <SidebarInset className="min-h-svh bg-background">
             <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="lg:hidden" />
@@ -208,15 +191,13 @@ export function Layout() {
                 onClick={() => setCreateProjectOpen(true)}
                 className="inline-flex h-8 items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
               >
-                <Plus className="size-3.5" />
                 <span className="hidden sm:inline">New project</span>
+                <span className="sm:hidden">Add</span>
               </button>
             </header>
             <div className="flex w-full min-w-0 flex-1 flex-col gap-4 px-4 py-4 md:px-6 md:py-6 lg:px-8">
               {setupGate === "loading" ? (
-                <div className="flex flex-1 items-center justify-center text-muted-foreground">
-                  Loading…
-                </div>
+                <div className="flex flex-1 items-center justify-center text-muted-foreground">Loading…</div>
               ) : (
                 <Outlet />
               )}
