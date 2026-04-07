@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { Cpu, HardDrive, Network, Timer } from "lucide-react";
 import { getServerStats, type ServerStats } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/PageHeader";
 
 export function Server() {
   const [stats, setStats] = useState<ServerStats | null>(null);
@@ -27,11 +29,14 @@ export function Server() {
 
   if (!stats) {
     return (
-      <div className="grid gap-4 md:grid-cols-2">
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
+      <div className="mx-auto max-w-4xl space-y-6">
+        <Skeleton className="h-10 w-40" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+        </div>
       </div>
     );
   }
@@ -40,54 +45,62 @@ export function Server() {
     n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(2)} MB` : `${Math.round(n)} B`;
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <h1 className="text-2xl font-semibold">Server</h1>
+    <div className="mx-auto max-w-4xl space-y-8">
+      <PageHeader title="Server" description="Host resource usage from the VersionGate engine." />
+
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">CPU</CardTitle>
+        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">CPU</CardTitle>
+            <Cpu className="size-4 text-primary/80" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-2xl font-semibold tabular-nums">{stats.cpu_percent.toFixed(1)}%</div>
-            <Progress value={Math.min(100, stats.cpu_percent)} />
+            <div className="text-3xl font-semibold tabular-nums">{stats.cpu_percent.toFixed(1)}%</div>
+            <Progress value={Math.min(100, stats.cpu_percent)} className="h-2" />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Memory</CardTitle>
+        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Memory</CardTitle>
+            <HardDrive className="size-4 text-primary/80" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-2xl font-semibold tabular-nums">{stats.memory_percent.toFixed(1)}%</div>
+            <div className="text-3xl font-semibold tabular-nums">{stats.memory_percent.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
               {fmt(stats.memory_used)} / {fmt(stats.memory_total)}
             </p>
-            <Progress value={Math.min(100, stats.memory_percent)} />
+            <Progress value={Math.min(100, stats.memory_percent)} className="h-2" />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Disk</CardTitle>
+        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Disk</CardTitle>
+            <HardDrive className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="text-2xl font-semibold tabular-nums">{stats.disk_percent.toFixed(1)}%</div>
+            <div className="text-3xl font-semibold tabular-nums">{stats.disk_percent.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
               {fmt(stats.disk_used)} / {fmt(stats.disk_total)}
             </p>
-            <Progress value={Math.min(100, stats.disk_percent)} />
+            <Progress value={Math.min(100, stats.disk_percent)} className="h-2" />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Network (cumulative)</CardTitle>
+        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Network</CardTitle>
+            <Network className="size-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="space-y-1 text-sm">
+          <CardContent className="space-y-2 text-sm">
             <div>
-              Sent: <span className="font-mono tabular-nums">{fmt(stats.network_sent)}</span>
+              Sent: <span className="font-mono tabular-nums text-foreground">{fmt(stats.network_sent)}</span>
             </div>
             <div>
-              Recv: <span className="font-mono tabular-nums">{fmt(stats.network_recv)}</span>
+              Recv: <span className="font-mono tabular-nums text-foreground">{fmt(stats.network_recv)}</span>
             </div>
-            <p className="text-xs text-muted-foreground pt-2">Uptime: {Math.floor(stats.uptime)}s</p>
+            <p className="flex items-center gap-1.5 pt-2 text-xs text-muted-foreground">
+              <Timer className="size-3.5" />
+              Uptime: {Math.floor(stats.uptime)}s
+            </p>
           </CardContent>
         </Card>
       </div>

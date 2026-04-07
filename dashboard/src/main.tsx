@@ -14,8 +14,8 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
+        <Route path="/setup" element={<Setup />} />
         <Route element={<Layout />}>
-          <Route path="/setup" element={<Setup />} />
           <Route path="/" element={<Overview />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/deploy/:jobId" element={<DeployLog />} />

@@ -129,7 +129,6 @@ export function createProject(data: {
   buildContext?: string;
   appPort: number;
   healthPath?: string;
-  basePort: number;
   env?: Record<string, string>;
 }): Promise<{ project: Project }> {
   return request("POST", "/projects", data);

@@ -15,6 +15,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/PageHeader";
+import { ExternalLink } from "lucide-react";
 
 export function ProjectDetail() {
   const navigate = useNavigate();
@@ -77,84 +79,111 @@ export function ProjectDetail() {
 
   if (loading || !project) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-32" />
-        <Skeleton className="h-64" />
+      <div className="mx-auto max-w-5xl space-y-6">
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-72 rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-          <p className="text-muted-foreground text-sm mt-1">{project.repoUrl}</p>
-          <p className="text-sm mt-2">
-            Branch: <span className="font-mono">{project.branch}</span>
-          </p>
-          <div className="mt-2">
-            <StatusBadge status={displayStatus} />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => void onDeploy()}>Deploy</Button>
-          <Button variant="outline" onClick={() => void onRollback()}>
-            Rollback
-          </Button>
-        </div>
+    <div className="mx-auto max-w-5xl space-y-8">
+      <PageHeader
+        title={project.name}
+        description={project.repoUrl}
+        actions={
+          <>
+            <a
+              href={project.repoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5" })}
+            >
+              <ExternalLink className="size-3.5" />
+              Repo
+            </a>
+            <Button onClick={() => void onDeploy()}>Deploy</Button>
+            <Button variant="secondary" onClick={() => void onRollback()}>
+              Rollback
+            </Button>
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="text-muted-foreground">Branch</span>
+        <code className="rounded-md border border-border/50 bg-muted/40 px-2 py-0.5 font-mono text-xs">{project.branch}</code>
+        <span className="text-muted-foreground">·</span>
+        <span className="text-muted-foreground">Ports</span>
+        <code className="rounded-md border border-border/50 bg-muted/40 px-2 py-0.5 font-mono text-xs">
+          {project.basePort}–{project.basePort + 1}
+        </code>
+        <StatusBadge status={displayStatus} />
       </div>
 
-      <Card>
+      <Card className="border-border/50 bg-card/50 ring-1 ring-border/30">
         <CardHeader>
-          <CardTitle>Environment chain</CardTitle>
-          <CardDescription>Placeholder for dev → staging → prod routing.</CardDescription>
+          <CardTitle>Pipeline</CardTitle>
+          <CardDescription>Environment progression (visual only).</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span className="rounded-md border px-3 py-1">dev</span>
-          <span>→</span>
-          <span className="rounded-md border px-3 py-1">staging</span>
-          <span>→</span>
-          <span className="rounded-md border px-3 py-1">prod</span>
+        <CardContent className="flex flex-wrap items-center gap-2 text-sm">
+          {(["dev", "staging", "prod"] as const).map((env, i) => (
+            <span key={env} className="flex items-center gap-2">
+              {i > 0 ? <span className="text-muted-foreground">→</span> : null}
+              <span className="rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 font-medium capitalize text-muted-foreground">
+                {env}
+              </span>
+            </span>
+          ))}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-border/50 bg-card/50 ring-1 ring-border/30">
         <CardHeader>
           <CardTitle>Deployment history</CardTitle>
+          <CardDescription>Recent builds and rollouts for this project.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Version</TableHead>
+              <TableRow className="border-border/50 hover:bg-transparent">
+                <TableHead className="pl-6">Version</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Container</TableHead>
                 <TableHead>Port</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead className="pr-6">Created</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deployments.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-mono">v{d.version}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={d.status} />
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{d.containerName}</TableCell>
-                  <TableCell>{d.port}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(d.createdAt).toLocaleString()}
+              {deployments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                    No deployments yet. Run a deploy to see history here.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                deployments.map((d) => (
+                  <TableRow key={d.id} className="border-border/40">
+                    <TableCell className="pl-6 font-mono">v{d.version}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={d.status} />
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{d.containerName}</TableCell>
+                    <TableCell>{d.port}</TableCell>
+                    <TableCell className="pr-6 text-sm text-muted-foreground">
+                      {new Date(d.createdAt).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      <Separator />
-      <Link to="/" className={buttonVariants({ variant: "link", size: "sm" })}>
+      <Separator className="opacity-40" />
+      <Link to="/" className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })}>
         ← Back to overview
       </Link>
     </div>

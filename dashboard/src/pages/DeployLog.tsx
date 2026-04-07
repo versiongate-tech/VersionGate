@@ -4,6 +4,7 @@ import { createWebSocket, getJobStatus } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/PageHeader";
 
 type LineKind = "info" | "success" | "error";
 
@@ -78,25 +79,27 @@ export function DeployLog() {
         : "secondary";
 
   return (
-    <div className="max-w-4xl space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">Deploy log</h1>
-        <Badge variant={badgeVariant} className="font-mono">
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeader title="Deploy log" description="Live output from the deployment job." />
+        <Badge variant={badgeVariant} className="shrink-0 font-mono text-xs">
           {jobStatus}
         </Badge>
       </div>
       {projectId && (
-        <Link to={`/projects/${projectId}`} className="text-sm text-muted-foreground hover:underline">
+        <Link to={`/projects/${projectId}`} className="inline-block text-sm text-muted-foreground hover:text-primary">
           ← Back to project
         </Link>
       )}
-      <Card className="border-zinc-800 bg-zinc-950">
-        <CardHeader className="py-3">
-          <CardTitle className="text-sm font-mono text-zinc-400">output</CardTitle>
+      <Card className="overflow-hidden border-border/50 bg-card/40 ring-1 ring-border/30">
+        <CardHeader className="border-b border-border/40 py-3">
+          <CardTitle className="font-mono text-xs font-normal uppercase tracking-wider text-muted-foreground">
+            Output
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="p-0">
           <pre
-            className="max-h-[min(70vh,560px)] overflow-auto rounded-md bg-black/40 p-4 font-mono text-xs leading-relaxed text-zinc-300"
+            className="max-h-[min(70vh,560px)] overflow-auto bg-black/50 p-4 font-mono text-xs leading-relaxed"
             style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
           >
             {lines.map((line, i) => {

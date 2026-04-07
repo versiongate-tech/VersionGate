@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Activity, AlertCircle, FolderKanban, Loader2, Plus } from "lucide-react";
 import { getAllDeployments, getProjects, triggerDeploy, type Deployment, type Project } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { PageHeader } from "@/components/PageHeader";
+import { StatCard } from "@/components/StatCard";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLaunchCreateProject } from "@/create-project-launch";
 
 function projectStatus(projectId: string, deployments: Deployment[]): string {
   const mine = deployments.filter((d) => d.projectId === projectId);
@@ -29,6 +33,7 @@ function lastDeployed(projectId: string, deployments: Deployment[]): string {
 }
 
 export function Overview() {
+  const launchCreate = useLaunchCreateProject();
   const [projects, setProjects] = useState<Project[]>([]);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,85 +85,120 @@ export function Overview() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-4 w-full max-w-md" />
+        </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
         </div>
-        <Skeleton className="h-64" />
+        <Skeleton className="h-72 rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-8">
+      <PageHeader
+        title="Overview"
+        description="Fleet status and deployments. Connect a repo to get started."
+        actions={
+          <Button onClick={launchCreate} className="gap-2 shadow-lg shadow-primary/10">
+            <Plus className="size-4" />
+            Add project
+          </Button>
+        }
+      />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total projects</CardTitle>
-          </CardHeader>
-          <CardContent className="text-3xl font-semibold tabular-nums">{stats.total}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Running</CardTitle>
-          </CardHeader>
-          <CardContent className="text-3xl font-semibold tabular-nums text-emerald-600">{stats.running}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Failed</CardTitle>
-          </CardHeader>
-          <CardContent className="text-3xl font-semibold tabular-nums text-red-600">{stats.failed}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Deploying</CardTitle>
-          </CardHeader>
-          <CardContent className="text-3xl font-semibold tabular-nums text-cyan-600">{stats.deploying}</CardContent>
-        </Card>
+        <StatCard label="Total projects" value={stats.total} icon={FolderKanban} />
+        <StatCard
+          label="Running"
+          value={stats.running}
+          icon={Activity}
+          valueClassName="text-emerald-400"
+          iconClassName="text-emerald-400/80"
+        />
+        <StatCard
+          label="Failed"
+          value={stats.failed}
+          icon={AlertCircle}
+          valueClassName="text-red-400"
+          iconClassName="text-red-400/80"
+        />
+        <StatCard
+          label="Deploying"
+          value={stats.deploying}
+          icon={Loader2}
+          valueClassName="text-cyan-400"
+          iconClassName="text-cyan-400/80"
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Projects</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last deployed</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projects.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={projectStatus(p.id, deployments)} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{lastDeployed(p.id, deployments)}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button size="sm" variant="secondary" onClick={() => void onDeploy(p.id)}>
-                      Deploy
-                    </Button>
-                    <Link
-                      to={`/projects/${p.id}`}
-                      className={buttonVariants({ variant: "outline", size: "sm" })}
-                    >
-                      View
-                    </Link>
-                  </TableCell>
+      {projects.length === 0 ? (
+        <Card className="border-dashed border-border/60 bg-card/40">
+          <CardHeader className="text-center sm:text-left">
+            <CardTitle>No projects yet</CardTitle>
+            <CardDescription>
+              Add a Git repository to deploy with blue/green rollouts and zero-downtime swaps.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center gap-4 pb-10 sm:flex-row sm:pb-8">
+            <Button size="lg" onClick={launchCreate} className="gap-2">
+              <Plus className="size-5" />
+              Create your first project
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-border/50 bg-card/60 shadow-none ring-1 ring-border/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div>
+              <CardTitle>Projects</CardTitle>
+              <CardDescription>Latest status per service</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="px-0 pb-2">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/50 hover:bg-transparent">
+                  <TableHead className="pl-6">Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last deployed</TableHead>
+                  <TableHead className="pr-6 text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {projects.map((p) => (
+                  <TableRow key={p.id} className="border-border/40">
+                    <TableCell className="pl-6 font-medium">{p.name}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={projectStatus(p.id, deployments)} />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{lastDeployed(p.id, deployments)}</TableCell>
+                    <TableCell className="pr-6 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => void onDeploy(p.id)}>
+                          Deploy
+                        </Button>
+                        <Link
+                          to={`/projects/${p.id}`}
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
