@@ -61,7 +61,11 @@ async function start(): Promise<void> {
       "VersionGate Engine is running"
     );
 
-    monitor.start();
+    if (config.databaseUrl) {
+      monitor.start();
+    } else {
+      logger.warn("DATABASE_URL not set — container monitor disabled until database is configured");
+    }
     systemMetrics.start();
 
     if (!config.databaseUrl) {

@@ -4,6 +4,7 @@ import { execSync } from "child_process";
 import { randomBytes } from "crypto";
 import { join } from "path";
 import { logger } from "../utils/logger";
+import { config } from "../config/env";
 import { envFilePath, projectRoot } from "../utils/paths";
 import { runPrismaSchemaSync } from "../utils/prisma-schema-sync";
 
@@ -116,7 +117,11 @@ export async function getSetupStatusHandler(
     }
   }
 
-  return reply.code(200).send({ configured, dbConnected });
+  /** `.env` was written but this process was started before DATABASE_URL was loaded — requires restart. */
+  const needsRestart =
+    configured && (!config.databaseUrl || config.databaseUrl.trim().length === 0);
+
+  return reply.code(200).send({ configured, dbConnected, needsRestart });
 }
 
 export async function applySetupHandler(

@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { reconcileHandler, getServerStatsHandler, getServerDashboardHandler } from "../controllers/system.controller";
+import { requireDatabaseConfigured } from "../middleware/require-database";
 
 export async function systemRoutes(app: FastifyInstance): Promise<void> {
   app.get("/server/stats", { handler: getServerStatsHandler });
@@ -7,6 +8,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
   app.get("/system/server-dashboard", { handler: getServerDashboardHandler });
 
   app.post("/system/reconcile", {
+    preHandler: requireDatabaseConfigured,
     schema: {
       response: {
         200: {

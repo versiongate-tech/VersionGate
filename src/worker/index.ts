@@ -1,4 +1,5 @@
 import { logger } from "../utils/logger";
+import { config } from "../config/env";
 import prisma from "../prisma/client";
 import { appendLog, claimNextJob, failJob, recoverStuckJobs } from "../services/job-queue";
 import { runDeployJob } from "./handlers/deploy.handler";
@@ -84,7 +85,16 @@ async function main(): Promise<void> {
   await loop();
 }
 
-main().catch((err) => {
-  logger.fatal({ err }, "Worker fatal");
-  process.exit(1);
-});
+if (!config.databaseUrl?.trim()) {
+  logger.warn(
+    "DATABASE_URL not set — worker idle. Complete setup at /setup, then restart the worker (e.g. pm2 restart versiongate-worker)."
+  );
+  setInterval(() => {
+    /* keep process alive for process managers */
+  }, 86_400_000);
+} else {
+  main().catch((err) => {
+    logger.fatal({ err }, "Worker fatal");
+    process.exit(1);
+  });
+}

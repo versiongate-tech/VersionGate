@@ -10,6 +10,7 @@ export async function setupRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             configured: { type: "boolean" },
             dbConnected: { type: "boolean" },
+            needsRestart: { type: "boolean" },
           },
         },
       },

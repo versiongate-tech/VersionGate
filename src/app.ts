@@ -13,6 +13,7 @@ import { webhookRoutes } from "./routes/webhook.routes";
 import { setupRoutes } from "./routes/setup.routes";
 import { logsRoutes } from "./routes/logs.route";
 import { jobRoutes } from "./routes/job.routes";
+import { requireDatabaseConfigured } from "./middleware/require-database";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -68,16 +69,38 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // ── API Routes (registered before static — order matters) ──────────────────
-  await app.register(deploymentRoutes, { prefix: "/api/v1" });
-  await app.register(projectRoutes, { prefix: "/api/v1" });
+  const dbRoutes = async (instance: FastifyInstance): Promise<void> => {
+    instance.addHook("preHandler", requireDatabaseConfigured);
+  };
+
+  await app.register(async (instance) => {
+    await instance.register(dbRoutes);
+    await deploymentRoutes(instance);
+  }, { prefix: "/api/v1" });
+  await app.register(async (instance) => {
+    await instance.register(dbRoutes);
+    await projectRoutes(instance);
+  }, { prefix: "/api/v1" });
   await app.register(systemRoutes, { prefix: "/api/v1" });
-  await app.register(metricsRoutes, { prefix: "/api/v1" });
-  await app.register(webhookRoutes, { prefix: "/api/v1" });
+  await app.register(async (instance) => {
+    await instance.register(dbRoutes);
+    await metricsRoutes(instance);
+  }, { prefix: "/api/v1" });
+  await app.register(async (instance) => {
+    await instance.register(dbRoutes);
+    await webhookRoutes(instance);
+  }, { prefix: "/api/v1" });
   await app.register(setupRoutes, { prefix: "/api/v1" });
 
   await app.register(import("@fastify/websocket"));
-  await app.register(logsRoutes, { prefix: "/api/v1" });
-  await app.register(jobRoutes, { prefix: "/api/v1" });
+  await app.register(async (instance) => {
+    await instance.register(dbRoutes);
+    await logsRoutes(instance);
+  }, { prefix: "/api/v1" });
+  await app.register(async (instance) => {
+    await instance.register(dbRoutes);
+    await jobRoutes(instance);
+  }, { prefix: "/api/v1" });
 
   // ── Dashboard static serving ────────────────────────────────────────────────
   if (existsSync(dashboardOutDir)) {

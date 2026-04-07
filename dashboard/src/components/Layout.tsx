@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -18,7 +18,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { LayoutDashboard, Server, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getServerStats } from "@/lib/api";
+import { getServerStats, getSetupStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -31,7 +31,33 @@ const navBtn =
   "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm text-sidebar-foreground ring-sidebar-ring outline-hidden transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate";
 
 export function Layout() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [serverOk, setServerOk] = useState(true);
+  const [setupGate, setSetupGate] = useState<"loading" | "ready">("loading");
+
+  useEffect(() => {
+    if (location.pathname === "/setup") {
+      setSetupGate("ready");
+      return;
+    }
+    let cancelled = false;
+    void getSetupStatus()
+      .then((s) => {
+        if (cancelled) return;
+        const incomplete = !s.configured || !s.dbConnected || (s.needsRestart ?? false);
+        if (incomplete) {
+          navigate("/setup", { replace: true });
+        }
+        setSetupGate("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setSetupGate("ready");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +129,13 @@ export function Layout() {
             </div>
           </header>
           <div className="flex flex-1 flex-col gap-4 p-4">
-            <Outlet />
+            {setupGate === "loading" && location.pathname !== "/setup" ? (
+              <div className="flex flex-1 items-center justify-center text-muted-foreground">
+                Loading…
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </SidebarInset>
       </SidebarProvider>

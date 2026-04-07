@@ -159,6 +159,25 @@ export function getServerStats(): Promise<ServerStats> {
   return request("GET", "/server/stats");
 }
 
+export interface SetupStatus {
+  configured: boolean;
+  dbConnected: boolean;
+  /** True when `.env` exists but this process has not loaded DATABASE_URL — restart the API. */
+  needsRestart: boolean;
+}
+
+export function getSetupStatus(): Promise<SetupStatus> {
+  return request("GET", "/setup/status");
+}
+
+export function applySetup(body: {
+  domain: string;
+  databaseUrl: string;
+  geminiApiKey?: string;
+}): Promise<{ configured: boolean }> {
+  return request("POST", "/setup/apply", body);
+}
+
 export function getJobStatus(jobId: string): Promise<{ job: JobRecord }> {
   return request("GET", `/jobs/${jobId}`);
 }
