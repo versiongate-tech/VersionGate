@@ -64,9 +64,13 @@ async function loop(): Promise<void> {
 
 async function main(): Promise<void> {
   logger.info("VersionGate Worker started");
-  const n = await recoverStuckJobs();
-  if (n > 0) {
-    logger.warn({ count: n }, "Recovered stuck RUNNING jobs as FAILED");
+  try {
+    const n = await recoverStuckJobs();
+    if (n > 0) {
+      logger.warn({ count: n }, "Recovered stuck RUNNING jobs as FAILED");
+    }
+  } catch (err) {
+    logger.error({ err }, "Worker: recoverStuckJobs failed — DB may be unreachable; will retry in loop");
   }
 
   const shutdown = async (signal: string): Promise<void> => {
