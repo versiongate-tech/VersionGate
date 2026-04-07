@@ -8,6 +8,7 @@ import { runContainer, stopContainer, removeContainer } from "../../utils/docker
 import { config } from "../../config/env";
 import { DeploymentError, BadRequestError } from "../../utils/errors";
 import { completeJob, failJob } from "../../services/job-queue";
+import { humanizeDeployFailure } from "../../utils/deploy-errors";
 import { logEmitter } from "../../events/log-emitter";
 
 const repo = new DeploymentRepository();
@@ -103,8 +104,9 @@ export async function runRollbackJob(job: Job & { project: Project }, log: LogFn
     logEmitter.emitStatus(jobId, "COMPLETE");
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    await failJob(jobId, errMsg);
-    await log(`FAILED: ${errMsg}`);
+    const friendly = humanizeDeployFailure(errMsg);
+    await failJob(jobId, friendly);
+    await log(`FAILED: ${friendly}`);
     logEmitter.emitStatus(jobId, "FAILED");
   } finally {
     await projectRepo.releaseDeployLock(projectId);

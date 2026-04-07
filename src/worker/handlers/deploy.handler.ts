@@ -10,6 +10,7 @@ import { TrafficService } from "../../services/traffic.service";
 import { GitService } from "../../services/git.service";
 import { ValidationService } from "../../services/validation.service";
 import { completeJob, failJob } from "../../services/job-queue";
+import { humanizeDeployFailure } from "../../utils/deploy-errors";
 import { logEmitter } from "../../events/log-emitter";
 import prisma from "../../prisma/client";
 
@@ -148,11 +149,12 @@ export async function runDeployJob(job: Job & { project: Project }, log: LogFn):
     logEmitter.emitStatus(jobId, "COMPLETE");
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
+    const friendly = humanizeDeployFailure(errMsg);
     if (deploymentId) {
-      await repo.updateStatus(deploymentId, DeploymentStatus.FAILED, errMsg).catch(() => null);
+      await repo.updateStatus(deploymentId, DeploymentStatus.FAILED, friendly).catch(() => null);
     }
-    await failJob(jobId, errMsg);
-    await log(`FAILED: ${errMsg}`);
+    await failJob(jobId, friendly);
+    await log(`FAILED: ${friendly}`);
     logEmitter.emitStatus(jobId, "FAILED");
   } finally {
     await projectRepo.releaseDeployLock(projectId);
