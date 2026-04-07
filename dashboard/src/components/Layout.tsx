@@ -100,14 +100,10 @@ export function Layout() {
         <SidebarProvider>
           <Sidebar collapsible="icon" className="border-r border-sidebar-border/80">
             <SidebarHeader className="border-b border-sidebar-border">
-              <div className="flex items-center gap-2 px-2 py-1">
-                <SidebarTrigger className="-ml-1" />
-                <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-                  <div className="flex size-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-xs font-semibold text-primary">
-                    VG
-                  </div>
-                  <span className="font-semibold tracking-tight text-foreground">VersionGate</span>
-                </div>
+              <div className="px-3 py-3">
+                <span className="font-semibold tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+                  VersionGate
+                </span>
               </div>
             </SidebarHeader>
             <SidebarContent>
@@ -170,7 +166,7 @@ export function Layout() {
             <SidebarRail />
           </Sidebar>
           <SidebarInset className="min-h-svh bg-background">
-            <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl">
+            <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background px-4">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="lg:hidden" />
                 <span className="text-sm font-medium tracking-wide text-muted-foreground">Control plane</span>
