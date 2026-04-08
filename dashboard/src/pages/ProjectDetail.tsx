@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { DeleteProjectDialog } from "@/components/DeleteProjectDialog";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   getDeployments,
@@ -46,6 +48,7 @@ export function ProjectDetail() {
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -122,6 +125,22 @@ export function ProjectDetail() {
   const totalDeploys = deployments.length;
   const lastDeploy = deployments[0];
 
+  const deploymentPie = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of deployments) {
+      m.set(d.status, (m.get(d.status) ?? 0) + 1);
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value }));
+  }, [deployments]);
+
+  const jobsByStatus = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const j of jobs) {
+      m.set(j.status, (m.get(j.status) ?? 0) + 1);
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value }));
+  }, [jobs]);
+
   return (
     <div className="w-full space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -153,11 +172,12 @@ export function ProjectDetail() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void onDeploy()} className="shadow-lg shadow-primary/10">
-            Deploy
-          </Button>
+          <Button onClick={() => void onDeploy()}>Deploy</Button>
           <Button variant="secondary" onClick={() => void onRollback()}>
             Rollback
+          </Button>
+          <Button type="button" variant="outline" className="border-destructive/35 text-destructive hover:bg-destructive/10" onClick={() => setDeleteOpen(true)}>
+            Delete
           </Button>
         </div>
       </div>
@@ -197,6 +217,35 @@ export function ProjectDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {deployments.length > 0 || jobs.length > 0 ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Deployments by status</CardTitle>
+              <CardDescription>Version history for this project.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={deploymentPie} emptyLabel="No deployments" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Jobs by status</CardTitle>
+              <CardDescription>Recent runs (up to 25 loaded).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {jobs.length > 0 ? (
+                <DonutChart data={jobsByStatus} emptyLabel="No jobs" />
+              ) : (
+                <div className="flex h-52 items-center justify-center rounded-lg border border-dashed border-border/50 text-sm text-muted-foreground">
+                  No jobs yet
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
         <CardHeader>
@@ -393,6 +442,15 @@ export function ProjectDetail() {
       </Card>
 
       <Separator className="opacity-40" />
+
+      <DeleteProjectDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        projectId={project.id}
+        projectName={project.name}
+        navigateTo="/"
+      />
+
       <Link to="/" className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })}>
         Back to overview
       </Link>

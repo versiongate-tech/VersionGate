@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { Link } from "react-router-dom";
 import { listAllJobs, type JobRecord } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
@@ -40,6 +42,24 @@ export function Activity() {
     return "secondary" as const;
   };
 
+  const jobsByStatus = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const j of jobs) {
+      m.set(j.status, (m.get(j.status) ?? 0) + 1);
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value }));
+  }, [jobs]);
+
+  const jobsByType = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const j of jobs) {
+      m.set(j.type, (m.get(j.type) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }));
+  }, [jobs]);
+
   return (
     <div className="w-full space-y-8">
       <PageHeader
@@ -51,6 +71,29 @@ export function Activity() {
           </Button>
         }
       />
+
+      {!loading && jobs.length > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader>
+              <CardTitle className="text-base">Jobs by status</CardTitle>
+              <CardDescription>Current page sample (up to 100 rows).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={jobsByStatus} />
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader>
+              <CardTitle className="text-base">Jobs by type</CardTitle>
+              <CardDescription>Deploy vs rollback frequency.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SimpleBarChart data={jobsByType} />
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
         <CardHeader className="border-b border-border/40">

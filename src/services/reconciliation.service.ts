@@ -72,15 +72,30 @@ export class ReconciliationService {
     let invalidated = 0;
 
     for (const d of active) {
-      const running = await inspectContainer(d.containerName);
+      let running: boolean;
+      try {
+        running = await inspectContainer(d.containerName);
+      } catch (err) {
+        logger.warn(
+          { err, deploymentId: d.id, containerName: d.containerName, projectId: d.projectId },
+          "Reconciliation: docker inspect failed — skipping this deployment (will retry on next startup)"
+        );
+        continue;
+      }
       if (!running) {
         logger.warn(
           { deploymentId: d.id, containerName: d.containerName, projectId: d.projectId },
           "ACTIVE deployment container is not running — marking FAILED"
         );
-        await this.repo.updateStatus(d.id, DeploymentStatus.FAILED).catch((err) => {
-          logger.error({ err, deploymentId: d.id }, "Failed to invalidate dead deployment");
-        });
+        await this.repo
+          .updateStatus(
+            d.id,
+            DeploymentStatus.FAILED,
+            "Container is not running (removed or exited)"
+          )
+          .catch((err) => {
+            logger.error({ err, deploymentId: d.id }, "Failed to invalidate dead deployment");
+          });
         invalidated++;
       }
     }

@@ -78,10 +78,20 @@ export async function freeHostPort(hostPort: number): Promise<void> {
 }
 
 /**
+ * True when `docker inspect` failed because the container/image ref does not exist.
+ * Other failures (daemon down, permission denied, timeout) must not be treated as "stopped".
+ */
+export function isDockerResourceNotFound(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /No such object|No such container|does not exist|no such id:/i.test(msg);
+}
+
+/**
  * Returns true if the container exists and is in a running state.
+ * Throws if Docker cannot be queried (so callers can skip health checks rather than mark deployments failed).
  */
 export async function inspectContainer(name: string): Promise<boolean> {
-  logger.info({ name }, "Inspecting Docker container");
+  logger.debug({ name }, "Inspecting Docker container");
   try {
     const { stdout } = await execFileAsync("docker", [
       "inspect",
@@ -90,8 +100,11 @@ export async function inspectContainer(name: string): Promise<boolean> {
       name,
     ]);
     return stdout.trim() === "true";
-  } catch {
-    return false;
+  } catch (err) {
+    if (isDockerResourceNotFound(err)) {
+      return false;
+    }
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { Link, useNavigate } from "react-router-dom";
 import {
   getAllDeployments,
@@ -20,6 +22,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useLaunchCreateProject } from "@/create-project-launch";
 import { getDisplayDeployment, hostPortForSlot, publicServiceUrl } from "@/lib/deployment-display";
+import { DeleteProjectDialog } from "@/components/DeleteProjectDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function projectStatus(projectId: string, deployments: Deployment[]): string {
   const mine = deployments.filter((d) => d.projectId === projectId);
@@ -51,6 +60,7 @@ export function Overview() {
   const [latestJobs, setLatestJobs] = useState<Record<string, JobRecord | undefined>>({});
   const [recentJobs, setRecentJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -98,6 +108,33 @@ export function Overview() {
     }
     return { total: projects.length, running, failed, deploying };
   }, [projects, deployments]);
+
+  const projectHealthPie = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const proj of projects) {
+      const s = projectStatus(proj.id, deployments);
+      m.set(s, (m.get(s) ?? 0) + 1);
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value }));
+  }, [projects, deployments]);
+
+  const deploymentStatusPie = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of deployments) {
+      m.set(d.status, (m.get(d.status) ?? 0) + 1);
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value }));
+  }, [deployments]);
+
+  const recentJobTypesBar = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const j of recentJobs) {
+      m.set(j.type, (m.get(j.type) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }));
+  }, [recentJobs]);
 
   const onDeploy = async (projectId: string) => {
     try {
@@ -158,9 +195,7 @@ export function Overview() {
           <Link to="/settings" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Settings
           </Link>
-          <Button onClick={launchCreate} className="shadow-lg shadow-primary/10">
-            Add project
-          </Button>
+          <Button onClick={launchCreate}>Add project</Button>
         </div>
       </div>
 
@@ -185,6 +220,38 @@ export function Overview() {
           hint="Build or rollout in progress"
         />
       </div>
+
+      {projects.length > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Projects by status</CardTitle>
+              <CardDescription>Derived from the latest deployment per project.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={projectHealthPie} emptyLabel="No projects" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">All deployments</CardTitle>
+              <CardDescription>Every recorded deployment version.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={deploymentStatusPie} emptyLabel="No deployments" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Recent jobs by type</CardTitle>
+              <CardDescription>Latest five jobs across the instance.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SimpleBarChart data={recentJobTypesBar} />
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {projects.length === 0 ? (
         <Card className="border-dashed border-border/60 bg-card/40">
@@ -233,7 +300,31 @@ export function Overview() {
                           </CardTitle>
                           <CardDescription className="mt-1 truncate font-mono text-xs">Branch: {p.branch}</CardDescription>
                         </div>
-                        <StatusBadge status={st} />
+                        <div className="flex shrink-0 items-center gap-2">
+                          <StatusBadge status={st} />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="relative z-20 inline-flex size-7 items-center justify-center rounded-md border border-border/60 bg-card/90 text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
+                              onPointerDown={(e) => e.stopPropagation()}
+                            >
+                              <span className="sr-only">Project actions</span>
+                              <span className="text-lg leading-none" aria-hidden>
+                                ⋯
+                              </span>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="z-50 w-44">
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(p);
+                                }}
+                              >
+                                Delete project
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3 pb-3">
@@ -366,6 +457,22 @@ export function Overview() {
           )}
         </div>
       )}
+
+      {deleteTarget ? (
+        <DeleteProjectDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) setDeleteTarget(null);
+          }}
+          projectId={deleteTarget.id}
+          projectName={deleteTarget.name}
+          navigateTo={false}
+          onDeleted={() => {
+            void load();
+            setDeleteTarget(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

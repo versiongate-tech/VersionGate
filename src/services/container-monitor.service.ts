@@ -123,7 +123,11 @@ export class ContainerMonitorService {
     );
 
     try {
-      await this.repo.updateStatus(deploymentId, DeploymentStatus.FAILED);
+      await this.repo.updateStatus(
+        deploymentId,
+        DeploymentStatus.FAILED,
+        "Container is not running (removed or exited)"
+      );
     } catch (err) {
       logger.error(
         { err, deploymentId, projectName: project.name },
