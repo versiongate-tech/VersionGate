@@ -21,7 +21,13 @@ import { StatCard } from "@/components/StatCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLaunchCreateProject } from "@/create-project-launch";
-import { getDisplayDeployment, hostPortForSlot, publicServiceUrl } from "@/lib/deployment-display";
+import {
+  getDeployingDeployment,
+  getDisplayDeployment,
+  hostPortForSlot,
+  latestDeploymentForColor,
+  publicServiceUrl,
+} from "@/lib/deployment-display";
 import { DeleteProjectDialog } from "@/components/DeleteProjectDialog";
 import {
   DropdownMenu,
@@ -277,14 +283,19 @@ export function Overview() {
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {projects.map((p) => {
+                const mine = deployments.filter((d) => d.projectId === p.id);
                 const row = getDisplayDeployment(p.id, deployments);
                 const st = projectStatus(p.id, deployments);
                 const job = latestJobs[p.id];
                 const hostPort = row ? hostPortForSlot(p, row.color) : null;
                 const hostUrl = hostPort != null ? publicServiceUrl(hostPort) : null;
-                const lastDeploy = deployments
-                  .filter((d) => d.projectId === p.id)
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+                const active = mine.find((d) => d.status === "ACTIVE");
+                const deploying = getDeployingDeployment(p.id, deployments);
+                const bluePort = p.basePort;
+                const greenPort = p.basePort + 1;
+                const blueLatest = latestDeploymentForColor(mine, "BLUE");
+                const greenLatest = latestDeploymentForColor(mine, "GREEN");
+                const lastDeploy = mine.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
                 return (
                   <Card
@@ -332,21 +343,73 @@ export function Overview() {
                         <span className="font-mono">{p.repoUrl.replace(/^https?:\/\/(www\.)?/, "")}</span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        {row && <SlotBadge color={row.color} />}
-                        {hostUrl ? (
-                          <a
-                            href={hostUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="relative z-20 truncate font-mono text-xs text-primary underline-offset-2 hover:underline"
-                          >
-                            {hostUrl.replace(/^https?:\/\//, "")} (open)
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/50">Not deployed</span>
-                        )}
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {row && <SlotBadge color={row.color} />}
+                          {hostUrl ? (
+                            <a
+                              href={hostUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="relative z-20 truncate font-mono text-xs text-primary underline-offset-2 hover:underline"
+                            >
+                              Live {hostUrl.replace(/^https?:\/\//, "")}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">Not deployed</span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] leading-tight">
+                          {(["BLUE", "GREEN"] as const).map((c) => {
+                            const port = c === "BLUE" ? bluePort : greenPort;
+                            const u = publicServiceUrl(port);
+                            const isLive = active?.color === c;
+                            const isDeploy = deploying?.color === c;
+                            const latest = c === "BLUE" ? blueLatest : greenLatest;
+                            return (
+                              <div
+                                key={c}
+                                className={`rounded-md border px-2 py-1.5 ${
+                                  c === "BLUE"
+                                    ? "border-sky-500/25 bg-sky-500/[0.06]"
+                                    : "border-emerald-500/25 bg-emerald-500/[0.06]"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-mono font-semibold text-foreground">{c === "BLUE" ? "Blue" : "Green"}</span>
+                                  {isLive ? (
+                                    <Badge className="h-4 bg-emerald-600/90 px-1 py-0 text-[9px] leading-none text-white hover:bg-emerald-600">
+                                      LIVE
+                                    </Badge>
+                                  ) : isDeploy ? (
+                                    <Badge variant="outline" className="h-4 border-amber-500/40 px-1 py-0 text-[9px] text-amber-200">
+                                      DEPLOY
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">idle</span>
+                                  )}
+                                </div>
+                                <a
+                                  href={u}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="relative z-20 mt-0.5 block truncate font-mono text-muted-foreground hover:text-primary hover:underline"
+                                >
+                                  :{port}
+                                </a>
+                                {latest ? (
+                                  <p className="mt-0.5 truncate text-muted-foreground" title={latest.containerName}>
+                                    v{latest.version} · {latest.status === "ACTIVE" ? "active" : latest.status.toLowerCase()}
+                                  </p>
+                                ) : (
+                                  <p className="mt-0.5 text-muted-foreground/70">—</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-4 border-t border-border/30 pt-3 text-xs text-muted-foreground">

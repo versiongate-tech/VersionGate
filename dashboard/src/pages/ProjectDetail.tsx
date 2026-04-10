@@ -21,7 +21,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
-import { hostPortForSlot, publicServiceUrl } from "@/lib/deployment-display";
+import { BlueGreenTrafficCard } from "@/components/BlueGreenTrafficCard";
+import { getDeployingDeployment, hostPortForSlot, publicServiceUrl } from "@/lib/deployment-display";
 
 function copyText(text: string, label: string) {
   void navigator.clipboard.writeText(text).then(
@@ -107,7 +108,7 @@ export function ProjectDetail() {
   }
 
   const active = deployments.find((d) => d.status === "ACTIVE");
-  const deploying = deployments.find((d) => d.status === "DEPLOYING");
+  const deploying = id ? getDeployingDeployment(id, deployments) : undefined;
   const displayStatus = deploying
     ? "DEPLOYING"
     : active
@@ -120,8 +121,6 @@ export function ProjectDetail() {
 
   const liveHostPort = active ? hostPortForSlot(project, active.color) : null;
   const liveUrl = liveHostPort != null ? publicServiceUrl(liveHostPort) : null;
-  const blueUrl = publicServiceUrl(project.basePort);
-  const greenUrl = publicServiceUrl(project.basePort + 1);
   const totalDeploys = deployments.length;
   const lastDeploy = deployments[0];
 
@@ -247,62 +246,15 @@ export function ProjectDetail() {
         </div>
       ) : null}
 
-      <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
-        <CardHeader>
-          <CardTitle>Traffic slots</CardTitle>
-          <CardDescription>
-            Blue uses host port <span className="font-mono">{project.basePort}</span>, green uses{" "}
-            <span className="font-mono">{project.basePort + 1}</span>. Public traffic follows whichever deployment is{" "}
-            <span className="font-medium text-foreground">ACTIVE</span>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <SlotBadge color="BLUE" />
-              {active?.color === "BLUE" && <Badge className="bg-emerald-600/90 text-white hover:bg-emerald-600">LIVE</Badge>}
-            </div>
-            <p className="font-mono text-sm text-foreground">{blueUrl?.replace(/^https?:\/\//, "")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => blueUrl && copyText(blueUrl, "URL")}>
-                Copy URL
-              </Button>
-              {blueUrl && (
-                <a href={blueUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "secondary", size: "sm", className: "h-7 text-xs" })}>
-                  Open
-                </a>
-              )}
-            </div>
-          </div>
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <SlotBadge color="GREEN" />
-              {active?.color === "GREEN" && <Badge className="bg-emerald-600/90 text-white hover:bg-emerald-600">LIVE</Badge>}
-            </div>
-            <p className="font-mono text-sm text-foreground">{greenUrl?.replace(/^https?:\/\//, "")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => greenUrl && copyText(greenUrl, "URL")}>
-                Copy URL
-              </Button>
-              {greenUrl && (
-                <a href={greenUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "secondary", size: "sm", className: "h-7 text-xs" })}>
-                  Open
-                </a>
-              )}
-            </div>
-          </div>
-        </CardContent>
-        {liveUrl && active && (
-          <CardContent className="border-t border-border/40 pt-4">
-            <p className="text-sm text-muted-foreground">
-              Current traffic: <SlotBadge color={active.color} /> pointing to{" "}
-              <span className="font-mono text-foreground">{liveUrl}</span> (host port{" "}
-              <span className="font-mono">{liveHostPort}</span> mapped to container port{" "}
-              <span className="font-mono">{project.appPort}</span>).
-            </p>
-          </CardContent>
-        )}
-      </Card>
+      <BlueGreenTrafficCard
+        project={project}
+        deployments={deployments}
+        active={active}
+        deploying={deploying}
+        liveHostPort={liveHostPort}
+        liveUrl={liveUrl}
+        onCopy={copyText}
+      />
 
       <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
         <CardHeader>
