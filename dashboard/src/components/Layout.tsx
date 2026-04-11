@@ -21,11 +21,13 @@ import { getProjects, getServerStats, getSetupStatus, type Project } from "@/lib
 import { cn } from "@/lib/utils";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { CreateProjectLaunchContext } from "@/create-project-launch";
+import { SidebarBreadcrumbs } from "@/components/SidebarBreadcrumbs";
 
 const nav = [
   { to: "/", label: "Overview", end: true },
+  { to: "/projects", label: "Projects", end: true },
   { to: "/activity", label: "Activity", end: false },
-  { to: "/server", label: "Host metrics", end: false },
+  { to: "/system", label: "System health", end: false },
   { to: "/settings", label: "Settings", end: false },
 ] as const;
 
@@ -100,10 +102,11 @@ export function Layout() {
         <SidebarProvider>
           <Sidebar collapsible="icon" className="border-r border-sidebar-border/80">
             <SidebarHeader className="border-b border-sidebar-border">
-              <div className="px-3 py-3">
+              <div className="space-y-2 px-3 py-3">
                 <span className="font-semibold tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">
                   VersionGate
                 </span>
+                <SidebarBreadcrumbs />
               </div>
             </SidebarHeader>
             <SidebarContent>

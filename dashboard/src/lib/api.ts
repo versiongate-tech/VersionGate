@@ -160,6 +160,46 @@ export function getServerStats(): Promise<ServerStats> {
   return request("GET", "/server/stats");
 }
 
+export type PreflightSeverity = "required" | "recommended" | "informational";
+
+export interface PreflightCheck {
+  id: string;
+  label: string;
+  severity: PreflightSeverity;
+  ok: boolean;
+  message: string;
+  detail?: string;
+}
+
+export interface PreflightReport {
+  ok: boolean;
+  checkedAt: string;
+  checks: PreflightCheck[];
+}
+
+export function getPreflight(): Promise<PreflightReport> {
+  return request("GET", "/system/preflight");
+}
+
+export interface DashboardAlert {
+  type: string;
+  message: string;
+  severity: "low" | "medium" | "high";
+}
+
+export interface SystemDashboardResponse {
+  status: string;
+  system_stats: ServerStats;
+  connections: { local_address: string; remote_address: string; state: string }[];
+  listening_ports: { address: string; port: number }[];
+  top_processes: { pid: number; name: string; cpu_percent: number; memory_percent: number }[];
+  alerts: DashboardAlert[];
+}
+
+export function getServerDashboard(): Promise<SystemDashboardResponse> {
+  return request("GET", "/system/server-dashboard");
+}
+
 export interface SetupStatus {
   configured: boolean;
   dbConnected: boolean;

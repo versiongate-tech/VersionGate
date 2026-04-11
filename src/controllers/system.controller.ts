@@ -51,6 +51,7 @@ export async function getServerDashboardHandler(
       status: "unavailable",
       system_stats: EMPTY_STATS,
       connections: [],
+      listening_ports: [],
       top_processes: [],
       alerts: [],
     });
