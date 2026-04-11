@@ -42,4 +42,14 @@ export const config = {
     maxLatencyMs: 2000,
     maxRetries: 15, // 30 seconds total — accommodates slow-booting apps
   },
+  /** Long random string. Enables GET/POST `/api/v1/system/update/*` (Bearer auth). */
+  selfUpdateSecret: optionalEnv("SELF_UPDATE_SECRET", "").trim(),
+  /** Tracked branch for git fetch/merge (must match your deploy remote). */
+  selfUpdateGitBranch: optionalEnv("SELF_UPDATE_GIT_BRANCH", "main"),
+  /** If > 0, periodically fetch origin and log or auto-apply (see SELF_UPDATE_AUTO_APPLY). */
+  selfUpdatePollMs: Math.max(0, parseInt(optionalEnv("SELF_UPDATE_POLL_MS", "0"), 10) || 0),
+  /** When true with SELF_UPDATE_POLL_MS, runs apply when origin is ahead (fast-forward only). */
+  selfUpdateAutoApply:
+    optionalEnv("SELF_UPDATE_AUTO_APPLY", "").toLowerCase() === "true" ||
+    optionalEnv("SELF_UPDATE_AUTO_APPLY", "") === "1",
 } as const;

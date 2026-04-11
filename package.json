@@ -19,7 +19,8 @@
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
-    "preflight": "bun run scripts/preflight.ts"
+    "preflight": "bun run scripts/preflight.ts",
+    "self-update": "bun run scripts/self-update.ts"
   },
   "dependencies": {
     "@fastify/sensible": "^5.5.0",

@@ -1,7 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { reconcileHandler, getServerStatsHandler, getServerDashboardHandler } from "../controllers/system.controller";
 import { preflightHandler } from "../controllers/preflight.controller";
+import {
+  selfUpdateApplyHandler,
+  selfUpdateStatusHandler,
+  selfUpdateWebhookHandler,
+} from "../controllers/self-update.controller";
 import { requireDatabaseConfigured } from "../middleware/require-database";
+import { config } from "../config/env";
 
 export async function systemRoutes(app: FastifyInstance): Promise<void> {
   /** Host compatibility (Docker, Git, network, …) — no database required. */
@@ -10,6 +16,12 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
   app.get("/server/stats", { handler: getServerStatsHandler });
   app.get("/system/server-stats", { handler: getServerStatsHandler });
   app.get("/system/server-dashboard", { handler: getServerDashboardHandler });
+
+  if (config.selfUpdateSecret) {
+    app.get("/system/update/status", { handler: selfUpdateStatusHandler });
+    app.post("/system/update/apply", { handler: selfUpdateApplyHandler });
+    app.post("/system/update/webhook", { handler: selfUpdateWebhookHandler });
+  }
 
   app.post("/system/reconcile", {
     preHandler: requireDatabaseConfigured,

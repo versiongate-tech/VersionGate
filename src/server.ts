@@ -71,6 +71,35 @@ async function start(): Promise<void> {
     if (!config.databaseUrl) {
       logger.info("Setup wizard available at http://0.0.0.0:" + PORT + "/setup");
     }
+
+    if (config.selfUpdateSecret && config.selfUpdatePollMs > 0) {
+      const pollMs = config.selfUpdatePollMs;
+      logger.info(
+        { pollMs, autoApply: config.selfUpdateAutoApply, branch: config.selfUpdateGitBranch },
+        "Self-update polling enabled"
+      );
+      setInterval(() => {
+        void (async () => {
+          try {
+            const { getSelfUpdateStatus, applySelfUpdate } = await import("./services/self-update.service");
+            const s = await getSelfUpdateStatus(config.selfUpdateGitBranch);
+            if (!s.isGitRepo || s.message || !s.behind) return;
+            if (config.selfUpdateAutoApply) {
+              logger.info({ branch: config.selfUpdateGitBranch }, "Self-update poll: applying (auto)");
+              const r = await applySelfUpdate(config.selfUpdateGitBranch);
+              if (!r.ok) logger.warn({ err: r.error }, "Self-update poll: apply failed");
+            } else {
+              logger.info(
+                { branch: config.selfUpdateGitBranch, local: s.currentCommit, remote: s.remoteCommit },
+                "Self-update: origin is ahead — set SELF_UPDATE_AUTO_APPLY=true or POST /api/v1/system/update/apply"
+              );
+            }
+          } catch (err) {
+            logger.warn({ err }, "Self-update poll error");
+          }
+        })();
+      }, pollMs);
+    }
   } catch (err) {
     logger.fatal({ err }, "Failed to start server");
     await prisma.$disconnect();

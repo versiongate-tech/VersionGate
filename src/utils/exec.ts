@@ -31,10 +31,13 @@ export async function execAsync(command: string): Promise<ExecResult> {
 export async function execFileAsync(
   cmd: string,
   args: string[],
-  extra?: Pick<ExecFileOptions, "env">
+  extra?: Pick<ExecFileOptions, "env" | "cwd">
 ): Promise<ExecResult> {
   try {
     const opts: ExecFileOptions = { maxBuffer: 50 * 1024 * 1024 };
+    if (extra?.cwd) {
+      opts.cwd = extra.cwd;
+    }
     if (extra?.env) {
       opts.env = { ...process.env, ...extra.env };
     }
