@@ -198,7 +198,17 @@ export function Layout() {
                 <Outlet />
               )}
             </div>
-            <CreateProjectModal open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
+            <CreateProjectModal
+              open={createProjectOpen}
+              onOpenChange={setCreateProjectOpen}
+              onCreated={() => {
+                void getProjects()
+                  .then((r) => setProjects(r.projects))
+                  .catch(() => {
+                    /* sidebar project list is non-critical */
+                  });
+              }}
+            />
           </SidebarInset>
         </SidebarProvider>
       </CreateProjectLaunchContext.Provider>

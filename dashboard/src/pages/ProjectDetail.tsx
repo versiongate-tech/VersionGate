@@ -48,7 +48,11 @@ export function ProjectDetail() {
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      setProject(null);
+      return;
+    }
     setLoading(true);
     try {
       const [p, d, j] = await Promise.all([
@@ -56,11 +60,14 @@ export function ProjectDetail() {
         getDeployments(id),
         listProjectJobs(id, { limit: 25 }),
       ]);
-      setProject(p.project);
+      setProject(p.project ?? null);
       setDeployments(d.deployments);
       setJobs(j.jobs);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load project");
+      setProject(null);
+      setDeployments([]);
+      setJobs([]);
     } finally {
       setLoading(false);
     }
@@ -93,12 +100,26 @@ export function ProjectDetail() {
     }
   };
 
-  if (loading || !project) {
+  if (loading) {
     return (
       <div className="w-full space-y-6">
         <Skeleton className="h-24 rounded-xl" />
         <Skeleton className="h-48 rounded-xl" />
         <Skeleton className="h-72 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="w-full space-y-4">
+        <p className="text-sm text-muted-foreground">This project could not be loaded. It may have been removed or the response was invalid.</p>
+        <Link
+          to="/"
+          className="inline-flex min-w-[2.25rem] items-center justify-center rounded-lg border border-border/50 bg-card/60 px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          Back to overview
+        </Link>
       </div>
     );
   }

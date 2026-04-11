@@ -19,7 +19,7 @@ The dashboard loads many endpoints at once; each waits on Postgres + Node. Under
 
 ### 1.2 Host constraints (critical)
 
-MOTD showed **`/` at 99% of 8.65GB**. That alone causes:
+MOTD showed **`/`** at 99% of 8.65GB. That alone causes:
 
 - Slow writes (logs, Docker layers, npm, Prisma)
 - Risk of `ENOSPC` during builds
@@ -56,19 +56,23 @@ Optional: add `public/favicon.ico` for older clients; keep `<link rel="icon" ...
 
 ### Phase A — Quick wins (low risk)
 
-| Item | Description |
-|------|-------------|
-| **Reduce parallel fan-out** | Overview currently loads `listProjectJobs` per project; replace with **one** endpoint e.g. `GET /api/v1/jobs/latest-per-project` or batch query server-side. |
-| **Client SWR / React Query** | Dedupe in-flight requests, `staleTime` for lists (e.g. 5–15s), background refresh. Cuts duplicate work when navigating. |
-| **HTTP headers** | For read-only JSON `GET`s, add `Cache-Control: private, max-age=0, must-revalidate` **or** short `max-age` where safe; add **ETag** from hash of payload or `updatedAt` max for conditional `304`. |
-| **Prisma** | Review indexes on `Job`, `Deployment`, `Project` for list/sort paths; ensure connection pool size suits the droplet (avoid opening too many concurrent queries). |
+
+| Item                         | Description                                                                                                                                                                                        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reduce parallel fan-out**  | Overview currently loads `listProjectJobs` per project; replace with **one** endpoint e.g. `GET /api/v1/jobs/latest-per-project` or batch query server-side.                                       |
+| **Client SWR / React Query** | Dedupe in-flight requests, `staleTime` for lists (e.g. 5–15s), background refresh. Cuts duplicate work when navigating.                                                                            |
+| **HTTP headers**             | For read-only JSON `GET`s, add `Cache-Control: private, max-age=0, must-revalidate` **or** short `max-age` where safe; add **ETag** from hash of payload or `updatedAt` max for conditional `304`. |
+| **Prisma**                   | Review indexes on `Job`, `Deployment`, `Project` for list/sort paths; ensure connection pool size suits the droplet (avoid opening too many concurrent queries).                                   |
+
 
 ### Phase B — Server-side cache (medium effort)
 
-| Item | Description |
-|------|-------------|
-| **In-memory TTL cache** | Small LRU or key-value with TTL (e.g. 5–10s) for heavy read handlers: `list projects`, `list deployments`, `list jobs` with same query params. **Invalidate** on POST/PATCH/DELETE that affect that data. |
-| **Separate read replicas** | Only if DB becomes the bottleneck at scale; not required for a single small VM if disk/RAM are fixed. |
+
+| Item                       | Description                                                                                                                                                                                               |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **In-memory TTL cache**    | Small LRU or key-value with TTL (e.g. 5–10s) for heavy read handlers: `list projects`, `list deployments`, `list jobs` with same query params. **Invalidate** on POST/PATCH/DELETE that affect that data. |
+| **Separate read replicas** | Only if DB becomes the bottleneck at scale; not required for a single small VM if disk/RAM are fixed.                                                                                                     |
+
 
 ### Phase C — Dashboard UX
 
