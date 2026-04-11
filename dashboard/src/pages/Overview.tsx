@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { DonutChart } from "@/components/charts/DonutChart";
+import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { Link, useNavigate } from "react-router-dom";
 import {
   getAllDeployments,
@@ -19,7 +21,20 @@ import { StatCard } from "@/components/StatCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLaunchCreateProject } from "@/create-project-launch";
-import { getDisplayDeployment, hostPortForSlot, publicServiceUrl } from "@/lib/deployment-display";
+import {
+  getDeployingDeployment,
+  getDisplayDeployment,
+  hostPortForSlot,
+  latestDeploymentForColor,
+  publicServiceUrl,
+} from "@/lib/deployment-display";
+import { DeleteProjectDialog } from "@/components/DeleteProjectDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function projectStatus(projectId: string, deployments: Deployment[]): string {
   const mine = deployments.filter((d) => d.projectId === projectId);
@@ -51,6 +66,7 @@ export function Overview() {
   const [latestJobs, setLatestJobs] = useState<Record<string, JobRecord | undefined>>({});
   const [recentJobs, setRecentJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -98,6 +114,33 @@ export function Overview() {
     }
     return { total: projects.length, running, failed, deploying };
   }, [projects, deployments]);
+
+  const projectHealthPie = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const proj of projects) {
+      const s = projectStatus(proj.id, deployments);
+      m.set(s, (m.get(s) ?? 0) + 1);
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value }));
+  }, [projects, deployments]);
+
+  const deploymentStatusPie = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const d of deployments) {
+      m.set(d.status, (m.get(d.status) ?? 0) + 1);
+    }
+    return [...m.entries()].map(([name, value]) => ({ name, value }));
+  }, [deployments]);
+
+  const recentJobTypesBar = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const j of recentJobs) {
+      m.set(j.type, (m.get(j.type) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({ name, value }));
+  }, [recentJobs]);
 
   const onDeploy = async (projectId: string) => {
     try {
@@ -158,9 +201,7 @@ export function Overview() {
           <Link to="/settings" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Settings
           </Link>
-          <Button onClick={launchCreate} className="shadow-lg shadow-primary/10">
-            Add project
-          </Button>
+          <Button onClick={launchCreate}>Add project</Button>
         </div>
       </div>
 
@@ -186,6 +227,38 @@ export function Overview() {
         />
       </div>
 
+      {projects.length > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Projects by status</CardTitle>
+              <CardDescription>Derived from the latest deployment per project.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={projectHealthPie} emptyLabel="No projects" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">All deployments</CardTitle>
+              <CardDescription>Every recorded deployment version.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DonutChart data={deploymentStatusPie} emptyLabel="No deployments" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Recent jobs by type</CardTitle>
+              <CardDescription>Latest five jobs across the instance.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SimpleBarChart data={recentJobTypesBar} />
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       {projects.length === 0 ? (
         <Card className="border-dashed border-border/60 bg-card/40">
           <CardContent className="flex flex-col items-center justify-center gap-6 py-16">
@@ -210,14 +283,19 @@ export function Overview() {
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {projects.map((p) => {
+                const mine = deployments.filter((d) => d.projectId === p.id);
                 const row = getDisplayDeployment(p.id, deployments);
                 const st = projectStatus(p.id, deployments);
                 const job = latestJobs[p.id];
                 const hostPort = row ? hostPortForSlot(p, row.color) : null;
                 const hostUrl = hostPort != null ? publicServiceUrl(hostPort) : null;
-                const lastDeploy = deployments
-                  .filter((d) => d.projectId === p.id)
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+                const active = mine.find((d) => d.status === "ACTIVE");
+                const deploying = getDeployingDeployment(p.id, deployments);
+                const bluePort = p.basePort;
+                const greenPort = p.basePort + 1;
+                const blueLatest = latestDeploymentForColor(mine, "BLUE");
+                const greenLatest = latestDeploymentForColor(mine, "GREEN");
+                const lastDeploy = mine.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
                 return (
                   <Card
@@ -233,7 +311,31 @@ export function Overview() {
                           </CardTitle>
                           <CardDescription className="mt-1 truncate font-mono text-xs">Branch: {p.branch}</CardDescription>
                         </div>
-                        <StatusBadge status={st} />
+                        <div className="flex shrink-0 items-center gap-2">
+                          <StatusBadge status={st} />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="relative z-20 inline-flex size-7 items-center justify-center rounded-md border border-border/60 bg-card/90 text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
+                              onPointerDown={(e) => e.stopPropagation()}
+                            >
+                              <span className="sr-only">Project actions</span>
+                              <span className="text-lg leading-none" aria-hidden>
+                                ⋯
+                              </span>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="z-50 w-44">
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(p);
+                                }}
+                              >
+                                Delete project
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3 pb-3">
@@ -241,21 +343,73 @@ export function Overview() {
                         <span className="font-mono">{p.repoUrl.replace(/^https?:\/\/(www\.)?/, "")}</span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        {row && <SlotBadge color={row.color} />}
-                        {hostUrl ? (
-                          <a
-                            href={hostUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="relative z-20 truncate font-mono text-xs text-primary underline-offset-2 hover:underline"
-                          >
-                            {hostUrl.replace(/^https?:\/\//, "")} (open)
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/50">Not deployed</span>
-                        )}
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {row && <SlotBadge color={row.color} />}
+                          {hostUrl ? (
+                            <a
+                              href={hostUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="relative z-20 truncate font-mono text-xs text-primary underline-offset-2 hover:underline"
+                            >
+                              Live {hostUrl.replace(/^https?:\/\//, "")}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">Not deployed</span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] leading-tight">
+                          {(["BLUE", "GREEN"] as const).map((c) => {
+                            const port = c === "BLUE" ? bluePort : greenPort;
+                            const u = publicServiceUrl(port);
+                            const isLive = active?.color === c;
+                            const isDeploy = deploying?.color === c;
+                            const latest = c === "BLUE" ? blueLatest : greenLatest;
+                            return (
+                              <div
+                                key={c}
+                                className={`rounded-md border px-2 py-1.5 ${
+                                  c === "BLUE"
+                                    ? "border-sky-500/25 bg-sky-500/[0.06]"
+                                    : "border-emerald-500/25 bg-emerald-500/[0.06]"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-mono font-semibold text-foreground">{c === "BLUE" ? "Blue" : "Green"}</span>
+                                  {isLive ? (
+                                    <Badge className="h-4 bg-emerald-600/90 px-1 py-0 text-[9px] leading-none text-white hover:bg-emerald-600">
+                                      LIVE
+                                    </Badge>
+                                  ) : isDeploy ? (
+                                    <Badge variant="outline" className="h-4 border-amber-500/40 px-1 py-0 text-[9px] text-amber-200">
+                                      DEPLOY
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">idle</span>
+                                  )}
+                                </div>
+                                <a
+                                  href={u}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="relative z-20 mt-0.5 block truncate font-mono text-muted-foreground hover:text-primary hover:underline"
+                                >
+                                  :{port}
+                                </a>
+                                {latest ? (
+                                  <p className="mt-0.5 truncate text-muted-foreground" title={latest.containerName}>
+                                    v{latest.version} · {latest.status === "ACTIVE" ? "active" : latest.status.toLowerCase()}
+                                  </p>
+                                ) : (
+                                  <p className="mt-0.5 text-muted-foreground/70">—</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-4 border-t border-border/30 pt-3 text-xs text-muted-foreground">
@@ -366,6 +520,22 @@ export function Overview() {
           )}
         </div>
       )}
+
+      {deleteTarget ? (
+        <DeleteProjectDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) setDeleteTarget(null);
+          }}
+          projectId={deleteTarget.id}
+          projectName={deleteTarget.name}
+          navigateTo={false}
+          onDeleted={() => {
+            void load();
+            setDeleteTarget(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

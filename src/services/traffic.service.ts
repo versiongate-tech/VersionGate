@@ -35,9 +35,10 @@ export class TrafficService {
     // Atomically move tmp → config
     await fs.rename(tmpPath, configPath);
 
-    // Reload Nginx; restore backup on failure
+    // Reload Nginx; restore backup on failure.
+    // Master often runs as root while the worker runs as a normal user — try passwordless sudo.
     try {
-      await execFileAsync("nginx", ["-s", "reload"]);
+      await this.reloadNginx();
       logger.info({ port }, "Nginx reloaded — traffic switched");
     } catch (err) {
       logger.error({ err }, "Nginx reload failed — restoring backup");
@@ -62,5 +63,15 @@ export class TrafficService {
       `  server 127.0.0.1:${port};`,
       "}",
     ].join("\n") + "\n";
+  }
+
+  private async reloadNginx(): Promise<void> {
+    try {
+      await execFileAsync("nginx", ["-s", "reload"]);
+      return;
+    } catch (directErr) {
+      logger.debug({ err: directErr }, "nginx reload as current user failed — trying sudo -n");
+    }
+    await execFileAsync("sudo", ["-n", "/usr/sbin/nginx", "-s", "reload"]);
   }
 }

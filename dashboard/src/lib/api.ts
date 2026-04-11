@@ -191,6 +191,13 @@ export function getInstanceSettings(): Promise<InstanceSettings> {
   return request("GET", "/settings/instance");
 }
 
+export function patchInstanceEnv(env: Record<string, string>): Promise<{
+  message: string;
+  keysWritten: string[];
+}> {
+  return request("PATCH", "/settings/env", { env });
+}
+
 export function applySetup(body: {
   domain: string;
   databaseUrl: string;

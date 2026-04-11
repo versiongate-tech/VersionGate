@@ -6,6 +6,23 @@ export function isDeploymentColor(c: string): c is DeploymentColor {
   return c === "BLUE" || c === "GREEN";
 }
 
+/** Most recent deployment row for a color (by `createdAt`). */
+export function latestDeploymentForColor(
+  deployments: Deployment[],
+  color: DeploymentColor
+): Deployment | undefined {
+  const rows = deployments.filter((d) => d.color === color);
+  if (rows.length === 0) return undefined;
+  return rows.reduce((a, b) => (new Date(b.createdAt) > new Date(a.createdAt) ? b : a));
+}
+
+/** Full URL to hit the app health check on a host slot (browser / curl). */
+export function healthCheckUrl(project: Project, hostPort: number): string {
+  const base = publicServiceUrl(hostPort).replace(/\/$/, "");
+  const path = project.healthPath.startsWith("/") ? project.healthPath : `/${project.healthPath}`;
+  return `${base}${path}`;
+}
+
 /** Published host port for blue/green (maps to Docker publish). */
 export function hostPortForSlot(project: Project, color: string): number {
   if (color === "GREEN") return project.basePort + 1;

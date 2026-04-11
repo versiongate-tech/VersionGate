@@ -2,12 +2,15 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import path from "path";
 import { randomBytes } from "crypto";
 import { ProjectRepository } from "../repositories/project.repository";
+import { DeploymentRepository } from "../repositories/deployment.repository";
+import { freeHostPort, removeContainer, stopContainer } from "../utils/docker";
 import { enqueueJob } from "../services/job-queue";
 import { config } from "../config/env";
 import { logger } from "../utils/logger";
 import { validateEnvObject } from "../utils/env";
 
 const projectRepo = new ProjectRepository();
+const deploymentRepo = new DeploymentRepository();
 
 interface CreateProjectBody {
   name: string;
@@ -100,8 +103,24 @@ export async function deleteProjectHandler(
   reply: FastifyReply
 ): Promise<void> {
   const { id } = req.params;
+  const project = await projectRepo.findById(id);
+  if (!project) {
+    return reply.code(404).send({ error: "NotFound", message: "Project not found" });
+  }
+
+  const deployments = await deploymentRepo.findAllForProject(id);
+  for (const d of deployments) {
+    await stopContainer(d.containerName).catch((err) => {
+      logger.warn({ err, containerName: d.containerName }, "deleteProject: stop container");
+    });
+    await removeContainer(d.containerName).catch((err) => {
+      logger.warn({ err, containerName: d.containerName }, "deleteProject: remove container");
+    });
+  }
+  await freeHostPort(project.basePort).catch(() => null);
+  await freeHostPort(project.basePort + 1).catch(() => null);
+
   await projectRepo.delete(id);
-  logger.info({ projectId: id }, "API: project deleted");
   reply.code(204).send();
 }
 

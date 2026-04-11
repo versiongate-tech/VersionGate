@@ -20,7 +20,15 @@ export class ValidationService {
 
     logger.info({ healthUrl, containerName }, "Starting validation");
 
-    const running = await inspectContainer(containerName);
+    let running = true;
+    try {
+      running = await inspectContainer(containerName);
+    } catch (err) {
+      logger.warn(
+        { err, containerName },
+        "Docker inspect failed during validation — continuing with HTTP health checks"
+      );
+    }
     if (!running) {
       const logs = await getContainerLogs(containerName, 30);
       logger.error({ containerName, logs }, "Container is not running");

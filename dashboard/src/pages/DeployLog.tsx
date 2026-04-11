@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { DonutChart } from "@/components/charts/DonutChart";
 import { Link, useParams } from "react-router-dom";
 import { createWebSocket, getJobStatus } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -163,6 +164,26 @@ export function DeployLog() {
 
   const isTerminal = jobStatus === "COMPLETE" || jobStatus === "FAILED" || jobStatus === "CANCELLED";
 
+  const logLineMix = useMemo(() => {
+    let step = 0;
+    let info = 0;
+    let success = 0;
+    let err = 0;
+    for (const line of lines) {
+      const k = classifyLine(line);
+      if (k === "step") step++;
+      else if (k === "success") success++;
+      else if (k === "error") err++;
+      else info++;
+    }
+    return [
+      { name: "Steps", value: step },
+      { name: "Info", value: info },
+      { name: "Success hints", value: success },
+      { name: "Errors", value: err },
+    ];
+  }, [lines]);
+
   return (
     <div className="w-full space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -210,6 +231,18 @@ export function DeployLog() {
           <AlertDescription className="whitespace-pre-wrap font-mono text-xs">{jobError}</AlertDescription>
         </Alert>
       )}
+
+      {lines.length > 0 ? (
+        <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Log line mix</CardTitle>
+            <p className="text-sm text-muted-foreground">Heuristic grouping of streamed lines (not log levels).</p>
+          </CardHeader>
+          <CardContent>
+            <DonutChart data={logLineMix} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden border-border/50 bg-card/40 ring-1 ring-border/30">
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border/40 py-3">
