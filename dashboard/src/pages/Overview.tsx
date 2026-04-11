@@ -28,6 +28,7 @@ import {
   latestDeploymentForColor,
   publicServiceUrl,
 } from "@/lib/deployment-display";
+import { projectDeploymentStatus } from "@/lib/project-deployment-status";
 import { DeleteProjectDialog } from "@/components/DeleteProjectDialog";
 import {
   DropdownMenu,
@@ -35,17 +36,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-function projectStatus(projectId: string, deployments: Deployment[]): string {
-  const mine = deployments.filter((d) => d.projectId === projectId);
-  const active = mine.find((d) => d.status === "ACTIVE");
-  if (mine.some((d) => d.status === "DEPLOYING")) return "DEPLOYING";
-  if (active) return "ACTIVE";
-  const last = mine.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-  if (last?.status === "FAILED") return "FAILED";
-  if (last?.status === "ROLLED_BACK") return "ROLLED_BACK";
-  return "PENDING";
-}
 
 function timeAgo(date: string): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -107,7 +97,7 @@ export function Overview() {
     let failed = 0;
     let deploying = 0;
     for (const proj of projects) {
-      const s = projectStatus(proj.id, deployments);
+      const s = projectDeploymentStatus(proj.id, deployments);
       if (s === "ACTIVE") running++;
       if (s === "FAILED") failed++;
       if (s === "DEPLOYING") deploying++;
@@ -118,7 +108,7 @@ export function Overview() {
   const projectHealthPie = useMemo(() => {
     const m = new Map<string, number>();
     for (const proj of projects) {
-      const s = projectStatus(proj.id, deployments);
+      const s = projectDeploymentStatus(proj.id, deployments);
       m.set(s, (m.get(s) ?? 0) + 1);
     }
     return [...m.entries()].map(([name, value]) => ({ name, value }));
@@ -195,8 +185,8 @@ export function Overview() {
           <Link to="/activity" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Activity
           </Link>
-          <Link to="/server" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Host metrics
+          <Link to="/system" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            System health
           </Link>
           <Link to="/settings" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Settings
@@ -277,15 +267,23 @@ export function Overview() {
       ) : (
         <div className="space-y-8">
           <div>
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold tracking-tight">Projects</h2>
-              <span className="text-xs text-muted-foreground">{projects.length} total</span>
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/projects"
+                  className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  Table view
+                </Link>
+                <span className="text-xs text-muted-foreground">{projects.length} total</span>
+              </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {projects.map((p) => {
                 const mine = deployments.filter((d) => d.projectId === p.id);
                 const row = getDisplayDeployment(p.id, deployments);
-                const st = projectStatus(p.id, deployments);
+                const st = projectDeploymentStatus(p.id, deployments);
                 const job = latestJobs[p.id];
                 const hostPort = row ? hostPortForSlot(p, row.color) : null;
                 const hostUrl = hostPort != null ? publicServiceUrl(hostPort) : null;

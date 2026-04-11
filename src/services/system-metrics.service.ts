@@ -28,6 +28,12 @@ export interface Connection {
   state: string;
 }
 
+/** TCP ports in LISTEN state (from `ss -tln` on Linux). */
+export interface ListeningPort {
+  address: string;
+  port: number;
+}
+
 export interface ProcessInfo {
   pid: number;
   name: string;
@@ -39,6 +45,7 @@ export interface SystemDashboard {
   status: "ok";
   system_stats: SystemStats;
   connections: Connection[];
+  listening_ports: ListeningPort[];
   top_processes: ProcessInfo[];
   alerts: Alert[];
 }
@@ -132,6 +139,37 @@ async function readDisk(): Promise<{ used: number; total: number; percent: numbe
 }
 
 // ── ss for connections ────────────────────────────────────────────────────────
+
+function parseListenLine(line: string): ListeningPort | null {
+  const parts = line.trim().split(/\s+/);
+  const listenIdx = parts.indexOf("LISTEN");
+  if (listenIdx < 0) return null;
+  // With Netid: tcp LISTEN 0 4096 0.0.0.0:9090 … — local is 4th after LISTEN
+  // Without: LISTEN 0 4096 0.0.0.0:9090 … — local is 3rd after LISTEN
+  const local = parts[listenIdx + 3] ?? "";
+  const idx = local.lastIndexOf(":");
+  if (idx < 0) return null;
+  const addr = local.slice(0, idx);
+  const port = parseInt(local.slice(idx + 1), 10);
+  if (!Number.isFinite(port)) return null;
+  return { address: addr.length > 0 ? addr : "*", port };
+}
+
+async function readListeningPorts(): Promise<ListeningPort[]> {
+  try {
+    const { stdout } = await execFileAsync("ss", ["-tln"]);
+    const lines = stdout.trim().split("\n");
+    const out: ListeningPort[] = [];
+    for (const line of lines) {
+      const p = parseListenLine(line);
+      if (p) out.push(p);
+    }
+    out.sort((a, b) => a.port - b.port || a.address.localeCompare(b.address));
+    return out;
+  } catch {
+    return [];
+  }
+}
 
 async function readConnections(): Promise<Connection[]> {
   try {
@@ -248,10 +286,11 @@ export class SystemMetricsService {
       const cpuPct = this.prevCpu ? calcCpuPercent(this.prevCpu, cpuNow) : 0;
       this.prevCpu = cpuNow;
 
-      const [mem, disk, connections, processes, procCount] = await Promise.all([
+      const [mem, disk, connections, listeningPorts, processes, procCount] = await Promise.all([
         Promise.resolve(readMemInfo()),
         readDisk(),
         readConnections(),
+        readListeningPorts(),
         readTopProcesses(),
         readProcessCount(),
       ]);
@@ -298,6 +337,7 @@ export class SystemMetricsService {
         status:       "ok",
         system_stats: stats,
         connections,
+        listening_ports: listeningPorts,
         top_processes: processes,
         alerts:       generateAlerts(stats),
       };
