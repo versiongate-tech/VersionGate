@@ -1,5 +1,8 @@
+import { config } from "../config/env";
 import { execFileAsync } from "./exec";
 import { logger } from "./logger";
+
+const dockerCmd = (): string => config.dockerBin;
 
 /**
  * Builds a Docker image from a local build context.
@@ -7,7 +10,7 @@ import { logger } from "./logger";
 export async function buildImage(imageTag: string, contextPath: string): Promise<void> {
   logger.info({ imageTag, contextPath }, "Building Docker image");
   // BuildKit enables Dockerfile # syntax= and RUN --mount=type=cache (smaller layers, less host disk churn).
-  await execFileAsync("docker", ["build", "-t", imageTag, contextPath], {
+  await execFileAsync(dockerCmd(), ["build", "-t", imageTag, contextPath], {
     env: { DOCKER_BUILDKIT: "1", BUILDKIT_PROGRESS: "plain" },
   });
 }
@@ -28,7 +31,7 @@ export async function runContainer(
 ): Promise<void> {
   logger.info({ name, imageTag, hostPort, containerPort, network }, "Starting Docker container");
   const envArgs = Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
-  await execFileAsync("docker", [
+  await execFileAsync(dockerCmd(), [
     "run",
     "-d",
     "--name", name,
@@ -46,7 +49,7 @@ export async function runContainer(
  */
 export async function stopContainer(name: string): Promise<void> {
   logger.info({ name }, "Stopping Docker container");
-  await execFileAsync("docker", ["stop", name]);
+  await execFileAsync(dockerCmd(), ["stop", name]);
 }
 
 /**
@@ -54,7 +57,7 @@ export async function stopContainer(name: string): Promise<void> {
  */
 export async function removeContainer(name: string): Promise<void> {
   logger.info({ name }, "Removing Docker container");
-  await execFileAsync("docker", ["rm", "-f", name]);
+  await execFileAsync(dockerCmd(), ["rm", "-f", name]);
 }
 
 /**
@@ -64,13 +67,13 @@ export async function removeContainer(name: string): Promise<void> {
  */
 export async function freeHostPort(hostPort: number): Promise<void> {
   try {
-    const { stdout } = await execFileAsync("docker", [
+    const { stdout } = await execFileAsync(dockerCmd(), [
       "ps", "-q", "--filter", `publish=${hostPort}`,
     ]);
     const ids = stdout.trim().split("\n").filter(Boolean);
     for (const id of ids) {
       logger.warn({ hostPort, id }, "Freeing port — killing container holding it");
-      await execFileAsync("docker", ["rm", "-f", id]).catch(() => null);
+      await execFileAsync(dockerCmd(), ["rm", "-f", id]).catch(() => null);
     }
   } catch {
     // no containers on that port
@@ -93,7 +96,7 @@ export function isDockerResourceNotFound(err: unknown): boolean {
 export async function inspectContainer(name: string): Promise<boolean> {
   logger.debug({ name }, "Inspecting Docker container");
   try {
-    const { stdout } = await execFileAsync("docker", [
+    const { stdout } = await execFileAsync(dockerCmd(), [
       "inspect",
       "-f",
       "{{.State.Running}}",
@@ -114,7 +117,7 @@ export async function inspectContainer(name: string): Promise<boolean> {
  */
 export async function getContainerRestartCount(name: string): Promise<number> {
   try {
-    const { stdout } = await execFileAsync("docker", [
+    const { stdout } = await execFileAsync(dockerCmd(), [
       "inspect", "-f", "{{.RestartCount}}", name,
     ]);
     return parseInt(stdout.trim(), 10) || 0;
@@ -140,7 +143,7 @@ export interface RawContainerStats {
 export async function getContainerStats(name: string): Promise<RawContainerStats | null> {
   logger.debug({ name }, "Fetching container stats");
   try {
-    const { stdout } = await execFileAsync("docker", [
+    const { stdout } = await execFileAsync(dockerCmd(), [
       "stats", "--no-stream", "--format", "{{json .}}", name,
     ]);
     const line = stdout.trim();
@@ -158,7 +161,7 @@ export async function getContainerStats(name: string): Promise<RawContainerStats
 export async function getContainerLogs(name: string, tail = 200): Promise<string[]> {
   logger.debug({ name, tail }, "Fetching container logs");
   try {
-    const { stdout, stderr } = await execFileAsync("docker", [
+    const { stdout, stderr } = await execFileAsync(dockerCmd(), [
       "logs", "--tail", String(tail), "--timestamps", name,
     ]);
     return (stdout + "\n" + stderr)

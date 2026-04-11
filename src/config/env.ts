@@ -1,7 +1,18 @@
+import { existsSync } from "fs";
 import dotenv from "dotenv";
 import { envFilePath } from "../utils/paths";
 
 dotenv.config({ path: envFilePath });
+
+/** Docker CLI path: explicit `DOCKER_BIN`, else first existing common path, else `docker` (relies on PATH). */
+function resolveDockerBin(): string {
+  const fromEnv = process.env.DOCKER_BIN?.trim();
+  if (fromEnv) return fromEnv;
+  for (const p of ["/usr/bin/docker", "/usr/local/bin/docker", "/snap/bin/docker"]) {
+    if (existsSync(p)) return p;
+  }
+  return "docker";
+}
 
 function optionalEnv(key: string, fallback: string): string {
   return process.env[key] ?? fallback;
@@ -17,6 +28,7 @@ export const config = {
   databaseUrl: optionalEnv("DATABASE_URL", ""),
   /** migrate: `prisma migrate deploy` (with db push fallback); push: `prisma db push` only */
   prismaSchemaSync,
+  dockerBin: resolveDockerBin(),
   dockerNetwork: optionalEnv("DOCKER_NETWORK", "versiongate-net"),
   nginxConfigPath: optionalEnv("NGINX_CONFIG_PATH", "/etc/nginx/conf.d/upstream.conf"),
   projectsRootPath: optionalEnv("PROJECTS_ROOT_PATH", "/var/versiongate/projects"),
