@@ -22,10 +22,12 @@ export async function setupRoutes(app: FastifyInstance): Promise<void> {
     schema: {
       body: {
         type: "object",
-        required: ["domain", "databaseUrl"],
+        required: ["domain", "databaseUrl", "adminEmail", "adminPassword"],
         properties: {
           domain: { type: "string", minLength: 1 },
           databaseUrl: { type: "string", minLength: 1 },
+          adminEmail: { type: "string", minLength: 3 },
+          adminPassword: { type: "string", minLength: 1 },
           geminiApiKey: { type: "string" },
         },
       },

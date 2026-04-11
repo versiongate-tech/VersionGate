@@ -312,6 +312,8 @@ export function patchInstanceEnv(env: Record<string, string>): Promise<{
 export function applySetup(body: {
   domain: string;
   databaseUrl: string;
+  adminEmail: string;
+  adminPassword: string;
   geminiApiKey?: string;
 }): Promise<{ configured: boolean }> {
   return request("POST", "/setup/apply", body);

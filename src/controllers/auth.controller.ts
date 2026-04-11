@@ -3,6 +3,7 @@ import { config } from "../config/env";
 import { logger } from "../utils/logger";
 import prisma from "../prisma/client";
 import {
+  AUTH_MIN_PASSWORD_LENGTH,
   SESSION_MAX_AGE_SEC,
   createSession,
   deleteSessionByRawToken,
@@ -17,10 +18,8 @@ import {
   getSessionTokenFromRequest,
 } from "../utils/cookie";
 
-const MIN_PASSWORD = 10;
-
 export async function authStatusHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  if (!config.databaseUrl?.trim()) {
+  if (!process.env.DATABASE_URL?.trim()) {
     reply.code(200).send({
       databaseReady: false,
       hasUsers: false,
@@ -58,7 +57,7 @@ export async function authRegisterHandler(
   req: FastifyRequest<{ Body: AuthBody }>,
   reply: FastifyReply
 ): Promise<void> {
-  if (!config.databaseUrl?.trim()) {
+  if (!process.env.DATABASE_URL?.trim()) {
     reply.code(503).send({ error: "ServiceUnavailable", message: "Database not configured" });
     return;
   }
@@ -76,10 +75,10 @@ export async function authRegisterHandler(
     reply.code(400).send({ error: "ValidationError", message: "Invalid email" });
     return;
   }
-  if (password.length < MIN_PASSWORD) {
+  if (password.length < AUTH_MIN_PASSWORD_LENGTH) {
     reply.code(400).send({
       error: "ValidationError",
-      message: `Password must be at least ${MIN_PASSWORD} characters`,
+      message: `Password must be at least ${AUTH_MIN_PASSWORD_LENGTH} characters`,
     });
     return;
   }
@@ -98,7 +97,7 @@ export async function authLoginHandler(
   req: FastifyRequest<{ Body: AuthBody }>,
   reply: FastifyReply
 ): Promise<void> {
-  if (!config.databaseUrl?.trim()) {
+  if (!process.env.DATABASE_URL?.trim()) {
     reply.code(503).send({ error: "ServiceUnavailable", message: "Database not configured" });
     return;
   }

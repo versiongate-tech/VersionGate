@@ -1,5 +1,6 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import type { PrismaClient } from "@prisma/client";
 import prisma from "../prisma/client";
 
 const scryptAsync = promisify(scrypt);
@@ -7,6 +8,9 @@ const scryptAsync = promisify(scrypt);
 const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
 
 export { SESSION_MAX_AGE_SEC };
+
+/** Minimum password length for dashboard accounts (register, setup admin). */
+export const AUTH_MIN_PASSWORD_LENGTH = 10;
 
 export async function hashPassword(plain: string): Promise<string> {
   const salt = randomBytes(16);
@@ -38,6 +42,17 @@ export async function createSession(userId: string): Promise<string> {
   const tokenHash = hashToken(raw);
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SEC * 1000);
   await prisma.session.create({
+    data: { tokenHash, userId, expiresAt },
+  });
+  return raw;
+}
+
+/** Used during first-time setup before the global Prisma client is reconnected. */
+export async function createSessionWithClient(client: PrismaClient, userId: string): Promise<string> {
+  const raw = randomBytes(32).toString("base64url");
+  const tokenHash = hashToken(raw);
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SEC * 1000);
+  await client.session.create({
     data: { tokenHash, userId, expiresAt },
   });
   return raw;

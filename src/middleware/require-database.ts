@@ -1,6 +1,4 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { config } from "../config/env";
-
 /**
  * Ensures DATABASE_URL is set (loaded from .env into config).
  * Use on routes that call Prisma; setup and health endpoints stay available without a DB.
@@ -9,7 +7,7 @@ export async function requireDatabaseConfigured(
   _req: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  if (config.databaseUrl?.trim()) return;
+  if (process.env.DATABASE_URL?.trim()) return;
 
   await reply.code(503).send({
     error: "ServiceUnavailable",

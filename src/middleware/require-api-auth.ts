@@ -1,5 +1,4 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { config } from "../config/env";
 import prisma from "../prisma/client";
 import { getUserFromSessionToken } from "../services/auth.service";
 import { getSessionTokenFromRequest } from "../utils/cookie";
@@ -36,7 +35,7 @@ export async function requireApiAuth(req: AuthedRequest, reply: FastifyReply): P
   if (!path.startsWith("/api/v1/")) return;
   if (isPublicApiPath(path)) return;
 
-  if (!config.databaseUrl?.trim()) {
+  if (!process.env.DATABASE_URL?.trim()) {
     return;
   }
 

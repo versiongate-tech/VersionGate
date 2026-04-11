@@ -3,14 +3,27 @@ import { accessSync, constants, existsSync, mkdirSync, readFileSync, writeFileSy
 import { execSync } from "child_process";
 import { randomBytes } from "crypto";
 import { join } from "path";
+import { PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger";
 import { config } from "../config/env";
 import { envFilePath, projectRoot } from "../utils/paths";
 import { runPrismaSchemaSync } from "../utils/prisma-schema-sync";
+import { reconnectPrismaAfterSetup } from "../prisma/client";
+import { notifySetupApplied } from "../services/post-setup-hooks";
+import {
+  AUTH_MIN_PASSWORD_LENGTH,
+  createSessionWithClient,
+  hashPassword,
+  isValidEmail,
+  SESSION_MAX_AGE_SEC,
+} from "../services/auth.service";
+import { buildSetSessionCookie } from "../utils/cookie";
 
 interface SetupApplyBody {
   domain: string;
   databaseUrl: string;
+  adminEmail: string;
+  adminPassword: string;
   geminiApiKey?: string;
 }
 
@@ -117,9 +130,8 @@ export async function getSetupStatusHandler(
     }
   }
 
-  /** `.env` was written but this process was started before DATABASE_URL was loaded — requires restart. */
-  const needsRestart =
-    configured && (!config.databaseUrl || config.databaseUrl.trim().length === 0);
+  /** `.env` exists but this process has no DATABASE_URL (e.g. not applied in-process yet). */
+  const needsRestart = configured && !process.env.DATABASE_URL?.trim();
 
   return reply.code(200).send({ configured, dbConnected, needsRestart });
 }
@@ -128,7 +140,7 @@ export async function applySetupHandler(
   req: FastifyRequest<{ Body: SetupApplyBody }>,
   reply: FastifyReply
 ): Promise<void> {
-  const { domain, databaseUrl, geminiApiKey } = req.body;
+  const { domain, databaseUrl, adminEmail, adminPassword, geminiApiKey } = req.body;
 
   if (!databaseUrl || databaseUrl.trim().length === 0) {
     return reply.code(400).send({ error: "BadRequest", message: "databaseUrl is required" });
@@ -136,6 +148,19 @@ export async function applySetupHandler(
 
   if (!domain || domain.trim().length === 0) {
     return reply.code(400).send({ error: "BadRequest", message: "domain is required" });
+  }
+
+  const email =
+    typeof adminEmail === "string" ? adminEmail.trim().toLowerCase() : "";
+  const password = typeof adminPassword === "string" ? adminPassword : "";
+  if (!isValidEmail(email)) {
+    return reply.code(400).send({ error: "BadRequest", message: "Invalid admin email" });
+  }
+  if (password.length < AUTH_MIN_PASSWORD_LENGTH) {
+    return reply.code(400).send({
+      error: "BadRequest",
+      message: `Admin password must be at least ${AUTH_MIN_PASSWORD_LENGTH} characters`,
+    });
   }
 
   const normalizedDomain = domain.trim().toLowerCase();
@@ -227,6 +252,36 @@ ENCRYPTION_KEY="${encryptionKey}"
       message: "Database migration failed: " + msg,
     });
   }
+
+  // 3b. Create first admin and session (dedicated client — global Prisma not wired yet)
+  const setupPrisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  let sessionToken: string;
+  try {
+    const passwordHash = await hashPassword(password);
+    const user = await setupPrisma.user.create({
+      data: { email, passwordHash },
+    });
+    sessionToken = await createSessionWithClient(setupPrisma, user.id);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ err: msg }, "Setup: failed to create admin user");
+    await setupPrisma.$disconnect().catch(() => {});
+    return reply.code(500).send({
+      error: "SetupError",
+      message: "Failed to create admin account: " + msg,
+    });
+  }
+  await setupPrisma.$disconnect().catch(() => {});
+
+  process.env.DATABASE_URL = databaseUrl;
+  process.env.ENCRYPTION_KEY = encryptionKey;
+  await reconnectPrismaAfterSetup();
+  notifySetupApplied();
+
+  reply.header(
+    "Set-Cookie",
+    buildSetSessionCookie(sessionToken, SESSION_MAX_AGE_SEC, config.cookieSecure)
+  );
 
   // 4. Write Nginx config (best-effort — may not have permissions)
   try {

@@ -117,7 +117,7 @@ export async function applySelfUpdate(branch: string): Promise<SelfUpdateApplyRe
     await execFileAsync("bunx", ["prisma", "generate"], { cwd: projectRoot });
     steps.push("prisma generate");
 
-    if (config.databaseUrl) {
+    if (process.env.DATABASE_URL?.trim()) {
       runPrismaSchemaSync({ mode: config.prismaSchemaSync });
       steps.push(`prisma schema sync (${config.prismaSchemaSync})`);
     } else {

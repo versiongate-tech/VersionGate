@@ -40,6 +40,7 @@ export function Layout() {
   const [setupGate, setSetupGate] = useState<"loading" | "ready">("loading");
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [headerUserEmail, setHeaderUserEmail] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +74,9 @@ export function Layout() {
         }
         if (!s.authenticated) {
           navigate("/login", { replace: true });
+          return;
         }
+        if (s.user?.email) setHeaderUserEmail(s.user.email);
       })
       .catch(() => {
         if (!cancelled) navigate("/login", { replace: true });
@@ -209,6 +212,14 @@ export function Layout() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {headerUserEmail ? (
+                  <span
+                    className="hidden max-w-[200px] truncate text-xs text-muted-foreground sm:inline"
+                    title={headerUserEmail}
+                  >
+                    {headerUserEmail}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {

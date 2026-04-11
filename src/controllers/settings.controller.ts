@@ -55,10 +55,10 @@ export async function getInstanceSettingsHandler(
 
   const dbFromFile = readDatabaseUrlFromFile();
   const databaseUrlInEnvFile = Boolean(dbFromFile && dbFromFile.length > 0);
-  const databaseUrlLoaded = Boolean(config.databaseUrl && config.databaseUrl.trim().length > 0);
+  const databaseUrlLoaded = Boolean(process.env.DATABASE_URL?.trim());
 
   let databaseReachable = false;
-  const urlToPing = databaseUrlLoaded ? config.databaseUrl : dbFromFile;
+  const urlToPing = databaseUrlLoaded ? process.env.DATABASE_URL!.trim() : dbFromFile;
   if (urlToPing) {
     databaseReachable = await canConnectToDatabase(urlToPing);
   }

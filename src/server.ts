@@ -2,15 +2,34 @@ import { buildApp } from "./app";
 import { config } from "./config/env";
 import { logger } from "./utils/logger";
 import { runPrismaSchemaSync } from "./utils/prisma-schema-sync";
-import prisma from "./prisma/client";
+import { disconnectPrisma } from "./prisma/client";
 import { ReconciliationService } from "./services/reconciliation.service";
 import { ContainerMonitorService } from "./services/container-monitor.service";
+import { registerAfterSetup } from "./services/post-setup-hooks";
 import { systemMetrics } from "./controllers/system.controller";
 import { kickSelfUpdatePoll, stopSelfUpdatePoll } from "./services/self-update-poll";
+
+function databaseUrlLive(): string {
+  return process.env.DATABASE_URL?.trim() ?? "";
+}
 
 async function start(): Promise<void> {
   const app = await buildApp();
   const monitor = new ContainerMonitorService();
+
+  registerAfterSetup(() => {
+    if (!databaseUrlLive()) return;
+    monitor.start();
+    void (async () => {
+      try {
+        const reconciliation = new ReconciliationService();
+        const report = await reconciliation.reconcile();
+        logger.info(report, "Post-setup reconciliation complete");
+      } catch (err) {
+        logger.warn({ err }, "Post-setup reconciliation failed");
+      }
+    })();
+  });
 
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {
@@ -19,7 +38,7 @@ async function start(): Promise<void> {
     systemMetrics.stop();
     monitor.stop();
     await app.close();
-    await prisma.$disconnect();
+    await disconnectPrisma();
     process.exit(0);
   };
 
@@ -31,13 +50,13 @@ async function start(): Promise<void> {
 
     // Run reconciliation before accepting requests — cleans up any crashed deploys
     // Skip if database is not configured (setup wizard not completed yet)
-    if (config.databaseUrl) {
+    if (databaseUrlLive()) {
       try {
         logger.info("Applying database migrations…");
         runPrismaSchemaSync({ mode: config.prismaSchemaSync });
       } catch (err) {
         logger.fatal({ err }, "Database migration failed — check DATABASE_URL and migration files");
-        await prisma.$disconnect();
+        await disconnectPrisma();
         process.exit(1);
       }
 
@@ -63,21 +82,21 @@ async function start(): Promise<void> {
       "VersionGate Engine is running"
     );
 
-    if (config.databaseUrl) {
+    if (databaseUrlLive()) {
       monitor.start();
     } else {
       logger.warn("DATABASE_URL not set — container monitor disabled until database is configured");
     }
     systemMetrics.start();
 
-    if (!config.databaseUrl) {
+    if (!databaseUrlLive()) {
       logger.info("Setup wizard available at http://0.0.0.0:" + PORT + "/setup");
     }
 
     kickSelfUpdatePoll();
   } catch (err) {
     logger.fatal({ err }, "Failed to start server");
-    await prisma.$disconnect();
+    await disconnectPrisma();
     process.exit(1);
   }
 }

@@ -1,6 +1,5 @@
 import { logger } from "../utils/logger";
-import { config } from "../config/env";
-import prisma from "../prisma/client";
+import { disconnectPrisma } from "../prisma/client";
 import { appendLog, claimNextJob, failJob, recoverStuckJobs } from "../services/job-queue";
 import { runDeployJob } from "./handlers/deploy.handler";
 import { runRollbackJob } from "./handlers/rollback.handler";
@@ -79,7 +78,7 @@ async function main(): Promise<void> {
     if (inFlight) {
       await inFlight.catch(() => null);
     }
-    await prisma.$disconnect();
+    await disconnectPrisma();
     process.exit(0);
   };
 
@@ -89,7 +88,7 @@ async function main(): Promise<void> {
   await loop();
 }
 
-if (!config.databaseUrl?.trim()) {
+if (!process.env.DATABASE_URL?.trim()) {
   logger.warn(
     "DATABASE_URL not set — worker idle. Complete setup at /setup, then restart the worker (e.g. pm2 restart versiongate-worker)."
   );
