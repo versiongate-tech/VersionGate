@@ -28,7 +28,7 @@ export class GitService {
    * If not → clone fresh.
    */
   async prepareSource(project: Project): Promise<void> {
-    logger.info({ projectId: project.id, branch: project.branch }, "Preparing source");
+    logger.debug({ projectId: project.id, branch: project.branch }, "Preparing source");
 
     await this.ensureProjectDirectory(project);
 
@@ -36,10 +36,10 @@ export class GitService {
     const isExisting = await this.isGitRepo(repoDir);
 
     if (isExisting) {
-      logger.info({ projectId: project.id }, "Repo exists — fetching latest");
+      logger.debug({ projectId: project.id }, "Repo exists — fetching latest");
       await this.pullLatest(project, repoDir);
     } else {
-      logger.info({ projectId: project.id }, "Cloning repository");
+      logger.debug({ projectId: project.id }, "Cloning repository");
       await this.cloneRepo(project, repoDir);
     }
 

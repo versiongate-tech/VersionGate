@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { ReconciliationService } from "../services/reconciliation.service";
 import { SystemMetricsService } from "../services/system-metrics.service";
+import { logger } from "../utils/logger";
 
 const reconciliationService = new ReconciliationService();
 
@@ -28,6 +29,7 @@ export async function reconcileHandler(
   _req: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
+  logger.info("API: manual reconcile requested");
   const report = await reconciliationService.reconcile();
   reply.code(200).send({ ok: true, report });
 }

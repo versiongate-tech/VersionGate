@@ -19,7 +19,7 @@ The dashboard loads many endpoints at once; each waits on Postgres + Node. Under
 
 ### 1.2 Host constraints (critical)
 
-MOTD showed **`/`** at 99% of 8.65GB. That alone causes:
+MOTD showed `**/`** at 99% of 8.65GB. That alone causes:
 
 - Slow writes (logs, Docker layers, npm, Prisma)
 - Risk of `ENOSPC` during builds
@@ -29,7 +29,7 @@ MOTD showed **`/`** at 99% of 8.65GB. That alone causes:
 
 ### 1.3 Worker / DB
 
-Worker log showed **`PrismaClientKnownRequestError` `P2028`** — *Unable to start a transaction in the given time.* That indicates DB overload, lock contention, or disk I/O starvation—not something client-side caching fixes by itself.
+Worker log showed `**PrismaClientKnownRequestError` `P2028`** — *Unable to start a transaction in the given time.* That indicates DB overload, lock contention, or disk I/O starvation—not something client-side caching fixes by itself.
 
 ---
 
@@ -37,14 +37,14 @@ Worker log showed **`PrismaClientKnownRequestError` `P2028`** — *Unable to sta
 
 ### Cause
 
-Vite only copies static files from **`dashboard/public/`** into the build output root (`dashboard/out/`). The backend serves `dashboard/out` as static files; `index.html` references `/favicon.svg`.
+Vite only copies static files from `**dashboard/public/*`* into the build output root (`dashboard/out/`). The backend serves `dashboard/out` as static files; `index.html` references `/favicon.svg`.
 
 If `favicon.svg` lives only beside `index.html` in source **or only on the server** but not under `public/`, it **will not** appear in `out/` after `bun run build`, so `/favicon.svg` 404s or falls through to SPA `index.html`.
 
 ### Fix (operator + repo)
 
-1. Put the asset at **`dashboard/public/favicon.svg`** (this branch adds a **placeholder** you can replace with your own artwork).
-2. Rebuild: `cd dashboard && bun install && bun run build` — confirm **`dashboard/out/favicon.svg`** exists.
+1. Put the asset at `**dashboard/public/favicon.svg`** (this branch adds a **placeholder** you can replace with your own artwork).
+2. Rebuild: `cd dashboard && bun install && bun run build` — confirm `**dashboard/out/favicon.svg`** exists.
 3. Restart / redeploy the API so it serves the new `out/` tree.
 4. Hard-refresh the browser (cache).
 
@@ -92,7 +92,7 @@ Today the dashboard and `/api/v1` are effectively **open** on the same origin as
 
 ### Option 2 — API keys or Bearer tokens
 
-- Add `Authorization: Bearer <token>` (or `X-API-Key`) checked in Fastify `onRequest` for `/api/v1/*`, allowlist `/health`, `/api/v1/setup/*` when not configured.
+- Add `Authorization: Bearer <token>` (or `X-API-Key`) checked in Fastify `onRequest` for `/api/v1/`*, allowlist `/health`, `/api/v1/setup/*` when not configured.
 - Store hashed tokens in DB or env `VERSIONGATE_ADMIN_TOKEN`.
 - Dashboard: login form stores token in `sessionStorage` or httpOnly cookie set by a small login route.
 

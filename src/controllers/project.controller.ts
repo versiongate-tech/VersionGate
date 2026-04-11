@@ -72,6 +72,7 @@ export async function createProjectHandler(
   const localPath = path.join(config.projectsRootPath, project.id);
   const updated = await projectRepo.update(project.id, { localPath });
 
+  logger.info({ projectId: updated.id, name: updated.name }, "API: project created");
   reply.code(201).send({ project: updated });
 }
 
@@ -98,7 +99,9 @@ export async function deleteProjectHandler(
   req: FastifyRequest<{ Params: ProjectParams }>,
   reply: FastifyReply
 ): Promise<void> {
-  await projectRepo.delete(req.params.id);
+  const { id } = req.params;
+  await projectRepo.delete(id);
+  logger.info({ projectId: id }, "API: project deleted");
   reply.code(204).send();
 }
 
@@ -106,7 +109,9 @@ export async function rollbackProjectHandler(
   req: FastifyRequest<{ Params: ProjectParams }>,
   reply: FastifyReply
 ): Promise<void> {
-  const jobId = await enqueueJob("ROLLBACK", req.params.id, {});
+  const projectId = req.params.id;
+  const jobId = await enqueueJob("ROLLBACK", projectId, {});
+  logger.info({ projectId, jobId }, "API: rollback enqueued");
   reply.code(202).send({ jobId, status: "PENDING" });
 }
 
@@ -120,6 +125,7 @@ export async function updateProjectHandler(
     return reply.code(404).send({ error: "NotFound", message: "Project not found" });
   }
   const updated = await projectRepo.update(id, req.body);
+  logger.info({ projectId: id }, "API: project updated");
   reply.code(200).send({ project: updated });
 }
 
@@ -218,5 +224,6 @@ export async function updateProjectEnvHandler(
   }
 
   const updated = await projectRepo.update(id, { env });
+  logger.info({ projectId: id, envKeys: Object.keys(env).length }, "API: project env updated");
   reply.code(200).send({ project: updated });
 }

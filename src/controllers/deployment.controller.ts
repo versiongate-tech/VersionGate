@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { DeploymentService } from "../services/deployment.service";
 import { enqueueJob } from "../services/job-queue";
+import { logger } from "../utils/logger";
 
 const deploymentService = new DeploymentService();
 
@@ -14,6 +15,7 @@ export async function deployHandler(
 ): Promise<void> {
   const { projectId } = req.body;
   const jobId = await enqueueJob("DEPLOY", projectId, {});
+  logger.info({ projectId, jobId }, "API: deploy enqueued");
   reply.code(202).send({ jobId, status: "PENDING" });
 }
 

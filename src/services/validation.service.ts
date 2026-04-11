@@ -50,7 +50,7 @@ export class ValidationService {
           if (latency > maxLatencyMs) {
             logger.warn({ healthUrl, attempt, latency }, `Latency ${latency}ms exceeded threshold (still passing)`);
           } else {
-            logger.info({ healthUrl, attempt, latency }, "Validation passed");
+            logger.debug({ healthUrl, attempt, latency }, "Validation passed");
           }
           return { success: true, latency };
         }

@@ -24,16 +24,49 @@ export async function buildApp(): Promise<FastifyInstance> {
     disableRequestLogging: true, // manual logging below — API only
   });
 
-  // ── Log only API requests; suppress high-frequency polling endpoints ────────
-  const SILENT_PATTERNS = [/\/metrics$/, /\/logs$/];
-  const isSilent = (url: string) => SILENT_PATTERNS.some((r) => r.test(url.split("?")[0]));
+  // ── API access log: skip noisy dashboard polling (successful GETs only) ─────
+  const pathOnly = (url: string): string => {
+    const i = url.indexOf("?");
+    return i === -1 ? url : url.slice(0, i);
+  };
+
+  /** Successful GETs matching these paths are not access-logged. */
+  const QUIET_SUCCESSFUL_GET: RegExp[] = [
+    /^\/health$/,
+    /^\/api\/v1\/server\/stats$/,
+    /^\/api\/v1\/system\/server-stats$/,
+    /^\/api\/v1\/system\/server-dashboard$/,
+    /^\/api\/v1\/setup\/status$/,
+    /^\/api\/v1\/settings\/instance$/,
+    /^\/api\/v1\/projects$/,
+    /^\/api\/v1\/deployments$/,
+    /^\/api\/v1\/jobs$/,
+    /^\/api\/v1\/jobs\/[^/]+$/,
+    /^\/api\/v1\/projects\/[^/]+$/,
+    /^\/api\/v1\/projects\/[^/]+\/deployments$/,
+    /^\/api\/v1\/projects\/[^/]+\/jobs$/,
+    /^\/api\/v1\/projects\/[^/]+\/metrics$/,
+  ];
+
+  const isQuietSuccessfulPoll = (pathname: string, method: string, status: number): boolean => {
+    if (status >= 400 || method !== "GET") return false;
+    if (QUIET_SUCCESSFUL_GET.some((r) => r.test(pathname))) return true;
+    // Metrics / container logs HTTP endpoints (not WebSocket job stream)
+    if (/\/metrics$/.test(pathname) || /\/logs$/.test(pathname)) return true;
+    return false;
+  };
 
   app.addHook("onResponse", async (req, reply) => {
-    const url = req.url;
-    if (!url.startsWith("/api/") && url !== "/health") return;
-    if (isSilent(url) && reply.statusCode < 400) return; // suppress successful polls
+    const pathname = pathOnly(req.url);
+    if (!pathname.startsWith("/api/") && pathname !== "/health") return;
+    if (isQuietSuccessfulPoll(pathname, req.method, reply.statusCode)) return;
     req.log.info(
-      { method: req.method, url, statusCode: reply.statusCode, ms: reply.elapsedTime.toFixed(1) },
+      {
+        method: req.method,
+        path: pathname,
+        statusCode: reply.statusCode,
+        ms: reply.elapsedTime.toFixed(1),
+      },
       "api"
     );
   });

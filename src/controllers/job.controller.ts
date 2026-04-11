@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import prisma from "../prisma/client";
 import { cancelPendingJob } from "../services/job-queue";
+import { logger } from "../utils/logger";
 
 export async function getJobHandler(
   req: FastifyRequest<{ Params: { id: string } }>,
@@ -59,9 +60,11 @@ export async function cancelJobHandler(
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply
 ): Promise<void> {
-  const ok = await cancelPendingJob(req.params.id);
+  const jobId = req.params.id;
+  const ok = await cancelPendingJob(jobId);
   if (!ok) {
     return reply.code(400).send({ error: "BadRequest", message: "Job is not pending or not found" });
   }
+  logger.info({ jobId }, "API: pending job cancelled");
   reply.code(200).send({ cancelled: true });
 }
