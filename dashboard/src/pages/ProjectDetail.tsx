@@ -51,6 +51,7 @@ export function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
+  const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -62,22 +63,31 @@ export function ProjectDetail() {
       return;
     }
     setLoading(true);
+    setEnvironmentsError(null);
     try {
       const [p, d, j] = await Promise.all([
         getProject(id),
         getDeployments(id),
         listProjectJobs(id, { limit: 25 }),
       ]);
-      const envData = await getProjectEnvironments(id).catch(() => ({ environments: [] as EnvironmentSummary[] }));
       setProject(p.project ?? null);
       setDeployments(d.deployments);
-      setEnvironments(envData.environments ?? []);
       setJobs(j.jobs);
+
+      try {
+        const envData = await getProjectEnvironments(id);
+        setEnvironments(envData.environments ?? []);
+        setEnvironmentsError(null);
+      } catch (envEx) {
+        setEnvironments([]);
+        setEnvironmentsError(envEx instanceof Error ? envEx.message : "Failed to load environments");
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load project");
       setProject(null);
       setDeployments([]);
       setEnvironments([]);
+      setEnvironmentsError(null);
       setJobs([]);
     } finally {
       setLoading(false);
@@ -132,7 +142,7 @@ export function ProjectDetail() {
     if (!id) return;
     try {
       const r = await triggerDeploy(id);
-      toast.success(`Deploy queued — job ${r.jobId.slice(0, 8)}…`);
+      toast.success(`Deploy queued (production) — job ${r.jobId.slice(0, 8)}…`);
       navigate(`/projects/${id}/deploy/${r.jobId}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Deploy failed");
@@ -150,16 +160,13 @@ export function ProjectDetail() {
     }
   };
 
-  const onDeployToDev = async () => {
+  const onDeployToEnvironment = async (environmentId: string) => {
     if (!id) return;
-    const dev = [...environments].sort((a, b) => a.chainOrder - b.chainOrder)[0];
-    if (!dev) {
-      toast.error("No development environment configured");
-      return;
-    }
+    const label =
+      environments.find((e) => e.id === environmentId)?.name ?? environmentId.slice(0, 8);
     try {
-      const r = await triggerDeploy(id, dev.id);
-      toast.success(`Dev deploy queued — job ${r.jobId.slice(0, 8)}…`);
+      const r = await triggerDeploy(id, environmentId);
+      toast.success(`Deploy queued — ${label} — job ${r.jobId.slice(0, 8)}…`);
       navigate(`/projects/${id}/deploy/${r.jobId}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Deploy failed");
@@ -238,7 +245,9 @@ export function ProjectDetail() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => void onDeploy()}>Deploy</Button>
+          <Button onClick={() => void onDeploy()} title="Deploys the default production environment">
+            Deploy
+          </Button>
           <Button variant="secondary" onClick={() => void onRollback()}>
             Rollback
           </Button>
@@ -284,6 +293,55 @@ export function ProjectDetail() {
         </Card>
       </div>
 
+      <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
+        <CardHeader>
+          <CardTitle className="text-base">Environments &amp; promotion</CardTitle>
+          <CardDescription>
+            Stages run on different host port ranges. Use <strong>Deploy to …</strong> on the first stage for a fresh build, then{" "}
+            <strong>Promote</strong> to reuse the upstream image on the next stage. The top <strong>Deploy</strong> button targets{" "}
+            <strong>production</strong> only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {environmentsError ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+              <p className="font-medium text-destructive">Could not list environments</p>
+              <p className="mt-1 text-muted-foreground">{environmentsError}</p>
+              <Button className="mt-3" variant="outline" size="sm" type="button" onClick={() => void load()}>
+                Retry
+              </Button>
+            </div>
+          ) : null}
+          {!environmentsError && environments.length === 0 ? (
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>No environments were returned for this project.</p>
+              <p>
+                New projects get <span className="font-medium text-foreground">development</span>,{" "}
+                <span className="font-medium text-foreground">staging</span>, and{" "}
+                <span className="font-medium text-foreground">production</span>. If this project was created on an older release, upgrade the
+                engine and apply migrations, or create a new project to get the full chain.
+              </p>
+            </div>
+          ) : null}
+          {!environmentsError && environments.length === 1 && environments[0]?.name === "production" ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400/95">
+              Only <strong className="font-medium">production</strong> is present. The dev → staging → production chain appears when all three
+              environment rows exist.
+            </p>
+          ) : null}
+          {!environmentsError && environments.length > 0 ? (
+            <EnvironmentChain
+              projectId={project.id}
+              environments={environments}
+              onRefresh={async () => {
+                await load();
+              }}
+              onDeployToEnvironment={onDeployToEnvironment}
+            />
+          ) : null}
+        </CardContent>
+      </Card>
+
       {deployments.length > 0 || jobs.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
@@ -311,19 +369,6 @@ export function ProjectDetail() {
             </CardContent>
           </Card>
         </div>
-      ) : null}
-
-      {environments.length > 0 ? (
-        <EnvironmentChain
-          projectId={project.id}
-          environments={environments}
-          onRefresh={async () => {
-            await load();
-          }}
-          onDeployToDev={async () => {
-            await onDeployToDev();
-          }}
-        />
       ) : null}
 
       <BlueGreenTrafficCard

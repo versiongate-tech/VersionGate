@@ -8,7 +8,7 @@ On startup (when `DATABASE_URL` is set), the engine runs schema sync from [`src/
 
 | `PRISMA_SCHEMA_SYNC` | Behavior |
 |----------------------|----------|
-| `migrate` (default) | Runs `bunx prisma migrate deploy`. On failure, falls back to `bunx prisma db push --accept-data-loss` (legacy / drifted DBs). |
+| `migrate` (default) | Runs `bunx prisma migrate deploy`. On some failures it falls back to `bunx prisma db push --accept-data-loss` (legacy / drifted DBs). **No fallback** on P3005 / P3009 / baseline errors — `db push` cannot replay multi-step migrations (e.g. data backfills). |
 | `push` | Runs **only** `bunx prisma db push --accept-data-loss` — no migration history required. Use only when you accept push-only discipline for that install. |
 
 Set in `.env`:
@@ -67,6 +67,8 @@ If logs show **`migrate deploy failed — falling back to prisma db push`**:
 
 1. Prefer **baselining** (above) so `migrate deploy` succeeds.
 2. Or set **`PRISMA_SCHEMA_SYNC=push`** explicitly if this install is intentionally push-only — then startup logs reflect policy instead of a failed migrate attempt.
+
+If you see **`Not using db push fallback`** with **P3005**, you must baseline (or use an empty database) — do not expect `db push` to fix it after a failed self-update.
 
 ## References
 

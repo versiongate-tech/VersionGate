@@ -81,7 +81,7 @@ After success, open the dashboard from `/`. The wizard is intended for initial b
 | `GEMINI_API_KEY` | No | — | Google AI Studio key for CI pipeline generation |
 | `GEMINI_MODEL` | No | `gemini-2.5-pro` | Gemini model ID |
 | `LOG_LEVEL` | No | `info` | Pino log level (`trace` `debug` `info` `warn` `error`) |
-| `PRISMA_SCHEMA_SYNC` | No | `migrate` | `migrate` = `prisma migrate deploy` (with `db push` fallback on failure); `push` = `db push` only (legacy / dev) |
+| `PRISMA_SCHEMA_SYNC` | No | `migrate` | `migrate` = `prisma migrate deploy` (optional `db push` fallback except P3005/P3009/baseline); `push` = `db push` only (legacy / dev) |
 
 ---
 

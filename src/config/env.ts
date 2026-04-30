@@ -4,6 +4,16 @@ import { envFilePath } from "../utils/paths";
 
 dotenv.config({ path: envFilePath });
 
+/** Default and normalize so startup, self-update, and spawned CLIs all see an explicit value. */
+(() => {
+  const t = process.env.PRISMA_SCHEMA_SYNC?.trim().toLowerCase();
+  if (!t || (t !== "push" && t !== "migrate")) {
+    process.env.PRISMA_SCHEMA_SYNC = "migrate";
+    return;
+  }
+  process.env.PRISMA_SCHEMA_SYNC = t;
+})();
+
 /** Docker CLI path: explicit `DOCKER_BIN`, else first existing common path, else `docker` (relies on PATH). */
 function resolveDockerBin(): string {
   const fromEnv = process.env.DOCKER_BIN?.trim();
@@ -18,7 +28,7 @@ function optionalEnv(key: string, fallback: string): string {
   return process.env[key] ?? fallback;
 }
 
-const prismaSchemaSyncRaw = optionalEnv("PRISMA_SCHEMA_SYNC", "migrate").toLowerCase();
+const prismaSchemaSyncRaw = optionalEnv("PRISMA_SCHEMA_SYNC", "migrate").trim().toLowerCase();
 const prismaSchemaSync: "migrate" | "push" =
   prismaSchemaSyncRaw === "push" ? "push" : "migrate";
 
@@ -26,7 +36,7 @@ export const config = {
   port: parseInt(optionalEnv("PORT", "9090"), 10) || 9090,
   logLevel: optionalEnv("LOG_LEVEL", "info"),
   databaseUrl: optionalEnv("DATABASE_URL", ""),
-  /** migrate: `prisma migrate deploy` (with db push fallback); push: `prisma db push` only */
+  /** migrate: `prisma migrate deploy` (optional db push fallback); push: `prisma db push` only */
   prismaSchemaSync,
   dockerBin: resolveDockerBin(),
   dockerNetwork: optionalEnv("DOCKER_NETWORK", "versiongate-net"),

@@ -48,6 +48,19 @@ export function runPrismaSchemaSync(options: {
     if (strict) {
       throw firstErr;
     }
+    // P3005 = DB never baselined for Migrate; push would emit wrong one-shot DDL (e.g. NOT NULL
+    // without the backfill steps in versioned migrations). Do not fall back to db push.
+    const noPushFallback =
+      /\bP3005\b/i.test(msg) ||
+      /\bP3009\b/i.test(msg) ||
+      /baseline an existing production database/i.test(msg);
+    if (noPushFallback) {
+      logger.error(
+        { err: msg },
+        "prisma migrate deploy failed (baseline / migration history). Not using db push fallback — baseline this database then run migrate deploy (see docs/database-migrations.md)."
+      );
+      throw firstErr;
+    }
     logger.warn(
       { err: msg },
       "prisma migrate deploy failed — falling back to prisma db push (legacy or drifted database)"
