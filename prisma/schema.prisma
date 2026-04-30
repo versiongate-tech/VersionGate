@@ -41,89 +41,88 @@ model Session {
 }
 
 model Project {
-  id            String         @id @default(cuid())
-  name          String         @unique
+  id            String        @id @default(cuid())
+  name          String        @unique
   repoUrl       String
-  branch        String         @default("main")
+  branch        String        @default("main")
   localPath     String
   appPort       Int
-  healthPath    String         @default("/health")
+  healthPath    String        @default("/health")
   basePort      Int
-  buildContext  String         @default(".")
-  webhookSecret String?        @unique
-  env           Json           @default("{}")
-  lockedAt      DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deployments   Deployment[]
-  jobs          Job[]
+  buildContext  String        @default(".")
+  webhookSecret String?       @unique
+  env           Json          @default("{}")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
   environments  Environment[]
+  jobs          Job[]
 
   @@index([name])
 }
 
-/// Promotion pipeline stage (dev -> staging -> prod). Each has its own host port range for blue/green.
+/// Runtime target for deployments (e.g. production). Blueprint for staging/dev in later sprint work.
 model Environment {
-  id         String   @id @default(cuid())
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name       String
-  chainOrder Int
-  branch     String   @default("main")
-  serverHost String   @default("")
-  basePort   Int
-  appPort    Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
+  id          String   @id @default(cuid())
+  name        String
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch      String
+  serverHost  String   @default("localhost")
+  basePort    Int
+  appPort     Int
+  lockedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   deployments Deployment[]
+  jobs        Job[]
 
-  @@unique([projectId, chainOrder])
+  @@unique([projectId, name])
   @@index([projectId])
 }
 
 // Run after schema changes: bunx prisma migrate dev --name add_job_queue
 model Job {
-  id           String    @id @default(uuid())
-  type         String // DEPLOY, ROLLBACK, HEALTH_CHECK
-  status       String    @default("PENDING") // PENDING, RUNNING, COMPLETE, FAILED, CANCELLED
-  projectId    String
-  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  deploymentId String?
-  payload      Json
-  result       Json?
-  logs         Json      @default("[]")
-  error        String?
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(uuid())
+  type          String // DEPLOY, ROLLBACK, HEALTH_CHECK
+  status        String    @default("PENDING") // PENDING, RUNNING, COMPLETE, FAILED, CANCELLED
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environmentId String?
+  environment   Environment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
+  deploymentId  String?
+  payload       Json
+  result        Json?
+  logs          Json      @default("[]")
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([projectId])
+  @@index([environmentId])
   @@index([status])
 }
 
 model Deployment {
-  id            String           @id @default(cuid())
-  version       Int
-  imageTag      String
-  containerName String
-  port          Int
-  color         DeploymentColor
-  status        DeploymentStatus @default(PENDING)
-  errorMessage  String?
-  projectId     String
-  project       Project          @relation(fields: [projectId], references: [id])
-  environmentId String
-  environment   Environment      @relation(fields: [environmentId], references: [id])
+  id             String           @id @default(cuid())
+  version        Int
+  imageTag       String
+  containerName  String
+  port           Int
+  color          DeploymentColor
+  status         DeploymentStatus @default(PENDING)
+  errorMessage   String?
+  environmentId  String
+  environment    Environment      @relation(fields: [environmentId], references: [id], onDelete: Cascade)
   promotedFromId String?
-  promotedFrom   Deployment?    @relation("PromotionChain", fields: [promotedFromId], references: [id], onDelete: SetNull)
-  promotedTo     Deployment[]   @relation("PromotionChain")
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  promotedFrom   Deployment?      @relation("PromotionChain", fields: [promotedFromId], references: [id], onDelete: SetNull)
+  promotedInto   Deployment[]     @relation("PromotionChain")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@index([status])
   @@index([createdAt])
-  @@index([projectId])
   @@index([environmentId])
+  @@index([promotedFromId])
 }

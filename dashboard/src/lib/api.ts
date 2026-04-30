@@ -83,14 +83,28 @@ export interface Deployment {
   color: string;
   status: DeploymentStatus;
   errorMessage?: string | null;
+  /** Derived from the parent environment for dashboard filtering */
   projectId: string;
   environmentId?: string;
   promotedFromId?: string | null;
-  environment?: { id: string; name: string; chainOrder: number };
   createdAt: string;
   updatedAt: string;
 }
 
+export interface EnvironmentRow {
+  id: string;
+  name: string;
+  projectId: string;
+  branch: string;
+  serverHost: string;
+  basePort: number;
+  appPort: number;
+  lockedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Response from `GET /projects/:id/environments` (chain UI + active slot). */
 export interface EnvironmentSummary {
   id: string;
   name: string;
@@ -167,28 +181,42 @@ export function deleteProject(id: string): Promise<void> {
   return request("DELETE", `/projects/${id}`);
 }
 
-export function triggerDeploy(projectId: string, environmentId?: string): Promise<{ jobId: string; status: string }> {
-  const body = environmentId !== undefined ? { projectId, environmentId } : { projectId };
-  return request("POST", "/deploy", body);
+export function triggerDeploy(
+  projectId: string,
+  environmentId?: string
+): Promise<{ jobId: string; status: string; environmentId?: string }> {
+  return request("POST", "/deploy", { projectId, ...(environmentId ? { environmentId } : {}) });
 }
 
-export function rollback(projectId: string): Promise<{ jobId: string; status: string }> {
+export function listEnvironments(projectId: string): Promise<{ environments: EnvironmentSummary[] }> {
+  return request("GET", `/projects/${projectId}/environments`);
+}
+
+export const getProjectEnvironments = listEnvironments;
+
+export function rollback(projectId: string): Promise<{ jobId: string; status: string; environmentId?: string }> {
   return request("POST", `/projects/${projectId}/rollback`);
+}
+
+/** Reuse the source environment's ACTIVE image on the target environment (no build). */
+export function promoteEnvironment(
+  projectId: string,
+  targetEnvironmentId: string,
+  sourceEnvironmentId: string
+): Promise<{
+  jobId: string;
+  status: string;
+  environmentId: string;
+  sourceEnvironmentId: string;
+  imageTag: string;
+}> {
+  return request("POST", `/projects/${projectId}/environments/${targetEnvironmentId}/promote`, {
+    sourceEnvironmentId,
+  });
 }
 
 export function getDeployments(projectId: string): Promise<{ deployments: Deployment[] }> {
   return request("GET", `/projects/${projectId}/deployments`);
-}
-
-export function getProjectEnvironments(projectId: string): Promise<{ environments: EnvironmentSummary[] }> {
-  return request("GET", `/projects/${projectId}/environments`);
-}
-
-export function promoteEnvironment(
-  projectId: string,
-  envId: string
-): Promise<{ jobId: string; status: string }> {
-  return request("POST", `/projects/${projectId}/environments/${envId}/promote`);
 }
 
 export function getAllDeployments(): Promise<{ deployments: Deployment[] }> {

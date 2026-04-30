@@ -9,10 +9,8 @@ import {
   updateProjectEnvHandler,
   generatePipelineHandler,
 } from "../controllers/project.controller";
-import {
-  listProjectEnvironmentsHandler,
-  promoteEnvironmentHandler,
-} from "../controllers/environment.controller";
+import { listEnvironmentsHandler } from "../controllers/environment.controller";
+import { promoteEnvironmentHandler } from "../controllers/promote.controller";
 
 const envSchema = {
   type: "object",
@@ -88,6 +86,23 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     handler: listProjectsHandler,
   });
 
+  app.get("/projects/:id/environments", {
+    schema: {
+      response: {
+        200: {
+          type: "object",
+          properties: {
+            environments: {
+              type: "array",
+              items: { type: "object", additionalProperties: true },
+            },
+          },
+        },
+      },
+    },
+    handler: listEnvironmentsHandler,
+  });
+
   app.get("/projects/:id", {
     schema: {
       response: {
@@ -110,11 +125,11 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       body: {
         type: "object",
         properties: {
-          branch:       { type: "string", minLength: 1 },
+          branch: { type: "string", minLength: 1 },
           buildContext: { type: "string", minLength: 1 },
-          appPort:      { type: "integer", minimum: 1, maximum: 65535 },
-          healthPath:   { type: "string", minLength: 1 },
-          basePort:     { type: "integer", minimum: 1024, maximum: 65534 },
+          appPort: { type: "integer", minimum: 1, maximum: 65535 },
+          healthPath: { type: "string", minLength: 1 },
+          basePort: { type: "integer", minimum: 1024, maximum: 65534 },
         },
         additionalProperties: false,
       },
@@ -154,34 +169,25 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     handler: generatePipelineHandler,
   });
 
-  app.get("/projects/:id/environments", {
-    schema: {
-      response: {
-        200: {
-          type: "object",
-          properties: {
-            environments: {
-              type: "array",
-              items: {
-                type: "object",
-                additionalProperties: true,
-              },
-            },
-          },
-        },
-      },
-    },
-    handler: listProjectEnvironmentsHandler,
-  });
-
   app.post("/projects/:id/environments/:envId/promote", {
     schema: {
+      body: {
+        type: "object",
+        required: ["sourceEnvironmentId"],
+        properties: {
+          sourceEnvironmentId: { type: "string", minLength: 1 },
+        },
+        additionalProperties: false,
+      },
       response: {
         202: {
           type: "object",
           properties: {
             jobId: { type: "string" },
             status: { type: "string" },
+            environmentId: { type: "string" },
+            sourceEnvironmentId: { type: "string" },
+            imageTag: { type: "string" },
           },
         },
       },
@@ -197,6 +203,7 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             jobId: { type: "string" },
             status: { type: "string" },
+            environmentId: { type: "string" },
           },
         },
       },

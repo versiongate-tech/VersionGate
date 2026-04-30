@@ -115,6 +115,14 @@ export function ProjectDetail() {
     return environments.find((e) => e.chainOrder === prodChainOrder)?.id ?? null;
   }, [environments, prodChainOrder]);
 
+  const environmentNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of environments) {
+      m.set(e.id, e.name);
+    }
+    return m;
+  }, [environments]);
+
   const productionDeployments = useMemo(() => {
     if (!prodEnvId) return deployments;
     return deployments.filter((d) => d.environmentId === prodEnvId || d.environmentId === undefined);
@@ -436,7 +444,9 @@ export function ProjectDetail() {
                   return (
                     <TableRow key={d.id} className="border-border/40">
                       <TableCell className="pl-6 font-mono">v{d.version}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{d.environment?.name ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {d.environmentId ? environmentNameById.get(d.environmentId) ?? "—" : "—"}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <StatusBadge status={d.status} />

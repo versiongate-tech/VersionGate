@@ -1,7 +1,6 @@
-import { DeploymentStatus, Job, Project } from "@prisma/client";
+import { DeploymentStatus, Environment, Job, Project } from "@prisma/client";
 import { parseProjectEnv } from "../../utils/env";
 import { DeploymentRepository } from "../../repositories/deployment.repository";
-import { ProjectRepository } from "../../repositories/project.repository";
 import { EnvironmentRepository } from "../../repositories/environment.repository";
 import { TrafficService } from "../../services/traffic.service";
 import { ValidationService } from "../../services/validation.service";
@@ -13,39 +12,49 @@ import { humanizeDeployFailure } from "../../utils/deploy-errors";
 import { logEmitter } from "../../events/log-emitter";
 
 const repo = new DeploymentRepository();
-const projectRepo = new ProjectRepository();
 const envRepo = new EnvironmentRepository();
 const traffic = new TrafficService();
 const validation = new ValidationService();
 
 export type LogFn = (line: string) => void | Promise<void>;
 
-export async function runRollbackJob(job: Job & { project: Project }, log: LogFn): Promise<void> {
+export async function runRollbackJob(
+  job: Job & { project: Project; environment: Environment | null },
+  log: LogFn
+): Promise<void> {
   const { projectId, id: jobId } = job;
   const project = job.project;
 
-  const acquired = await projectRepo.acquireDeployLock(projectId);
+  const environment =
+    job.environment ?? (await envRepo.findDefaultForProject(projectId));
+  if (!environment) {
+    await failJob(jobId, `No environment for project ${projectId}`);
+    await log(`No default environment — cannot rollback`);
+    logEmitter.emitStatus(jobId, "FAILED");
+    return;
+  }
+
+  const environmentId = environment.id;
+
+  const acquired = await envRepo.acquireDeployLock(environmentId);
   if (!acquired) {
-    await failJob(jobId, `Deployment already in progress for project ${projectId}`);
+    await failJob(jobId, `Deployment already in progress for environment ${environmentId}`);
     await log(`Deploy lock already held — cannot rollback`);
     logEmitter.emitStatus(jobId, "FAILED");
     return;
   }
 
   try {
-    await log(`Initiating rollback for project ${project.name} (${projectId})`);
+    await log(
+      `Initiating rollback for project ${project.name} (${projectId}), env ${environment.name} (${environmentId})`
+    );
 
-    const prodEnv = await envRepo.findProductionForProject(projectId);
-    if (!prodEnv) {
-      throw new BadRequestError("No Production environment for project");
-    }
-
-    const current = await repo.findActiveForEnvironment(prodEnv.id);
+    const current = await repo.findActiveForEnvironment(environmentId);
     if (!current) {
       throw new BadRequestError("No active deployment to roll back from");
     }
 
-    const previous = await repo.findPreviousForEnvironment(prodEnv.id, current.version);
+    const previous = await repo.findPreviousForEnvironment(environmentId, current.version);
     if (!previous) {
       throw new BadRequestError("No previous deployment available for rollback");
     }
@@ -54,7 +63,9 @@ export async function runRollbackJob(job: Job & { project: Project }, log: LogFn
       throw new BadRequestError("Already at the earliest available deployment");
     }
 
-    await log(`Rolling back from ${current.containerName} (v${current.version}) to ${previous.containerName} (v${previous.version})`);
+    await log(
+      `Rolling back from ${current.containerName} (v${current.version}) to ${previous.containerName} (v${previous.version})`
+    );
 
     await log(`Restarting previous container: ${previous.containerName}`);
     const projectEnv = parseProjectEnv(project.env);
@@ -66,7 +77,7 @@ export async function runRollbackJob(job: Job & { project: Project }, log: LogFn
       previous.containerName,
       previous.imageTag,
       previous.port,
-      prodEnv.appPort,
+      environment.appPort,
       config.dockerNetwork,
       projectEnv
     );
@@ -116,7 +127,7 @@ export async function runRollbackJob(job: Job & { project: Project }, log: LogFn
     await log(`FAILED: ${friendly}`);
     logEmitter.emitStatus(jobId, "FAILED");
   } finally {
-    await projectRepo.releaseDeployLock(projectId);
+    await envRepo.releaseDeployLock(environmentId);
     await log(`Deploy lock released`);
   }
 }

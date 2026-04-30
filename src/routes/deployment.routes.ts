@@ -26,18 +26,10 @@ const deploymentSchema = {
     port: { type: "number" },
     color: { type: "string" },
     status: { type: "string" },
-    projectId: { type: "string" },
+    errorMessage: { type: "string", nullable: true },
     environmentId: { type: "string" },
+    projectId: { type: "string" },
     promotedFromId: { type: "string", nullable: true },
-    environment: {
-      type: "object",
-      nullable: true,
-      properties: {
-        id: { type: "string" },
-        name: { type: "string" },
-        chainOrder: { type: "number" },
-      },
-    },
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
   },
@@ -53,6 +45,7 @@ export async function deploymentRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             jobId: { type: "string" },
             status: { type: "string" },
+            environmentId: { type: "string" },
           },
         },
       },

@@ -1,5 +1,5 @@
 import { DeploymentRepository } from "../repositories/deployment.repository";
-import { ProjectRepository } from "../repositories/project.repository";
+import { EnvironmentRepository } from "../repositories/environment.repository";
 import { stopContainer, removeContainer, inspectContainer } from "../utils/docker";
 import { DeploymentStatus } from "@prisma/client";
 import { logger } from "../utils/logger";
@@ -11,11 +11,11 @@ export interface ReconciliationReport {
 
 export class ReconciliationService {
   private readonly repo: DeploymentRepository;
-  private readonly projectRepo: ProjectRepository;
+  private readonly envRepo: EnvironmentRepository;
 
   constructor() {
     this.repo = new DeploymentRepository();
-    this.projectRepo = new ProjectRepository();
+    this.envRepo = new EnvironmentRepository();
   }
 
   /**
@@ -34,7 +34,7 @@ export class ReconciliationService {
     logger.info("Starting startup reconciliation");
 
     const deployingFixed = await this.fixDeployingDeployments();
-    const staleLocksCleared = await this.projectRepo.clearStaleDeployLocks();
+    const staleLocksCleared = await this.envRepo.clearStaleDeployLocks();
     const activeInvalidated = await this.auditActiveDeployments();
 
     logger.info(
@@ -52,7 +52,7 @@ export class ReconciliationService {
 
     for (const d of deploying) {
       logger.warn(
-        { deploymentId: d.id, containerName: d.containerName, projectId: d.projectId },
+        { deploymentId: d.id, containerName: d.containerName, environmentId: d.environmentId },
         "Recovering crashed deployment"
       );
       await stopContainer(d.containerName).catch(() => null);
@@ -77,14 +77,14 @@ export class ReconciliationService {
         running = await inspectContainer(d.containerName);
       } catch (err) {
         logger.warn(
-          { err, deploymentId: d.id, containerName: d.containerName, projectId: d.projectId },
+          { err, deploymentId: d.id, containerName: d.containerName, environmentId: d.environmentId },
           "Reconciliation: docker inspect failed — skipping this deployment (will retry on next startup)"
         );
         continue;
       }
       if (!running) {
         logger.warn(
-          { deploymentId: d.id, containerName: d.containerName, projectId: d.projectId },
+          { deploymentId: d.id, containerName: d.containerName, environmentId: d.environmentId },
           "ACTIVE deployment container is not running — marking FAILED"
         );
         await this.repo

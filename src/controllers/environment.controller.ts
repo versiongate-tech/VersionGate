@@ -1,10 +1,7 @@
-import { FastifyReply, FastifyRequest } from "fastify";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { ProjectRepository } from "../repositories/project.repository";
 import { EnvironmentRepository } from "../repositories/environment.repository";
 import { DeploymentRepository } from "../repositories/deployment.repository";
-import { enqueueJob } from "../services/job-queue";
-import prisma from "../prisma/client";
-import { logger } from "../utils/logger";
 
 const projectRepo = new ProjectRepository();
 const envRepo = new EnvironmentRepository();
@@ -14,11 +11,16 @@ interface ProjectParams {
   id: string;
 }
 
-interface EnvParams extends ProjectParams {
-  envId: string;
+/** Stable ordering for default env names (dev → staging → prod); unknown names sort last. */
+function chainOrderForEnvironmentName(name: string): number {
+  const n = name.trim().toLowerCase();
+  if (n === "development" || n === "dev") return 0;
+  if (n === "staging") return 1;
+  if (n === "production" || n === "prod") return 2;
+  return 50;
 }
 
-export async function listProjectEnvironmentsHandler(
+export async function listEnvironmentsHandler(
   req: FastifyRequest<{ Params: ProjectParams }>,
   reply: FastifyReply
 ): Promise<void> {
@@ -27,14 +29,20 @@ export async function listProjectEnvironmentsHandler(
     return reply.code(404).send({ error: "NotFound", message: "Project not found" });
   }
 
-  const rows = await envRepo.listByProject(req.params.id);
+  const rows = await envRepo.findAllForProject(req.params.id);
+  const sorted = [...rows].sort((a, b) => {
+    const d = chainOrderForEnvironmentName(a.name) - chainOrderForEnvironmentName(b.name);
+    if (d !== 0) return d;
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
+
   const environments = [];
-  for (const e of rows) {
+  for (const e of sorted) {
     const active = await deploymentRepo.findActiveForEnvironment(e.id);
     environments.push({
       id: e.id,
       name: e.name,
-      chainOrder: e.chainOrder,
+      chainOrder: chainOrderForEnvironmentName(e.name),
       branch: e.branch,
       basePort: e.basePort,
       appPort: e.appPort,
@@ -52,56 +60,4 @@ export async function listProjectEnvironmentsHandler(
   }
 
   reply.code(200).send({ environments });
-}
-
-export async function promoteEnvironmentHandler(
-  req: FastifyRequest<{ Params: EnvParams }>,
-  reply: FastifyReply
-): Promise<void> {
-  const { id: projectId, envId } = req.params;
-
-  const project = await projectRepo.findById(projectId);
-  if (!project) {
-    return reply.code(404).send({ error: "NotFound", message: "Project not found" });
-  }
-
-  const targetEnv = await envRepo.findById(envId);
-  if (!targetEnv || targetEnv.projectId !== projectId) {
-    return reply.code(404).send({ error: "NotFound", message: "Environment not found" });
-  }
-
-  if (targetEnv.chainOrder === 0) {
-    return reply.code(400).send({
-      error: "BadRequest",
-      message: "Cannot promote into the first environment in the chain",
-    });
-  }
-
-  const upstream = await envRepo.findUpstream(targetEnv);
-  if (!upstream) {
-    return reply.code(400).send({ error: "BadRequest", message: "No upstream environment" });
-  }
-
-  const upstreamActive = await deploymentRepo.findActiveForEnvironment(upstream.id);
-  if (!upstreamActive || upstreamActive.status !== "ACTIVE") {
-    return reply.code(409).send({
-      error: "Conflict",
-      message: `Upstream environment "${upstream.name}" must have an ACTIVE deployment before promoting`,
-    });
-  }
-
-  const row = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { lockedAt: true },
-  });
-  if (row?.lockedAt != null) {
-    return reply.code(423).send({
-      error: "Locked",
-      message: "A deployment or promotion is already in progress for this project",
-    });
-  }
-
-  const jobId = await enqueueJob("PROMOTE", projectId, { targetEnvironmentId: envId });
-  logger.info({ projectId, envId, jobId }, "API: promote enqueued");
-  reply.code(202).send({ jobId, status: "PENDING" });
 }

@@ -1,7 +1,9 @@
 import { Job, Prisma } from "@prisma/client";
 import prisma from "../prisma/client";
 
-export async function claimNextJob(): Promise<(Job & { project: import("@prisma/client").Project }) | null> {
+export async function claimNextJob(): Promise<
+  (Job & { project: import("@prisma/client").Project; environment: import("@prisma/client").Environment | null }) | null
+> {
   return prisma.$transaction(async (tx) => {
     const next = await tx.job.findFirst({
       where: { status: "PENDING" },
@@ -17,7 +19,7 @@ export async function claimNextJob(): Promise<(Job & { project: import("@prisma/
 
     const job = await tx.job.findUnique({
       where: { id: next.id },
-      include: { project: true },
+      include: { project: true, environment: true },
     });
     return job;
   });
@@ -62,12 +64,14 @@ export async function appendLog(jobId: string, line: string): Promise<void> {
 export async function enqueueJob(
   type: string,
   projectId: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  environmentId?: string
 ): Promise<string> {
   const job = await prisma.job.create({
     data: {
       type,
       projectId,
+      ...(environmentId ? { environmentId } : {}),
       payload: payload as Prisma.InputJsonValue,
     },
   });

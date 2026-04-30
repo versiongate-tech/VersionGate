@@ -1,9 +1,9 @@
-import { Deployment, DeploymentColor, DeploymentStatus, Environment } from "@prisma/client";
+import { Deployment, DeploymentColor, DeploymentStatus } from "@prisma/client";
 import { config } from "../config/env";
 import { parseProjectEnv } from "../utils/env";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 import { ProjectRepository } from "../repositories/project.repository";
-import { EnvironmentRepository } from "../repositories/environment.repository";
+import { EnvironmentRepository, DEFAULT_ENVIRONMENT_NAME } from "../repositories/environment.repository";
 import { buildImage, runContainer, stopContainer, removeContainer, freeHostPort } from "../utils/docker";
 import { ensureDockerfile } from "../utils/dockerfile";
 import { logger } from "../utils/logger";
@@ -11,13 +11,9 @@ import { ConflictError, DeploymentError, NotFoundError } from "../utils/errors";
 import { TrafficService } from "./traffic.service";
 import { GitService } from "./git.service";
 
-function containerBaseName(projectName: string, env: Environment): string {
-  const slug = env.name.toLowerCase().replace(/\s+/g, "-");
-  return `${projectName}-${slug}`;
-}
-
 export interface DeployOptions {
   projectId: string;
+  environmentId: string;
 }
 
 export interface DeployResult {
@@ -26,7 +22,6 @@ export interface DeployResult {
 }
 
 export class DeploymentService {
-  // Projects for which a cancel has been requested mid-deploy
   private static readonly cancelRequests = new Set<string>();
 
   private readonly repo: DeploymentRepository;
@@ -43,69 +38,53 @@ export class DeploymentService {
     this.git = new GitService();
   }
 
-  /**
-   * Full blue-green deployment pipeline:
-   * 1. Acquire per-project lock
-   * 2. Fetch project config
-   * 3. Clone/pull source via Git
-   * 4. Build Docker image from source
-   * 5. Determine color (BLUE/GREEN) and port
-   * 6. Start new container
-   * 7. Switch Nginx traffic
-   * 8. Mark new ACTIVE, retire old
-   * 9. Release lock (always — via finally)
-   */
   async deploy(opts: DeployOptions): Promise<DeployResult> {
-    const { projectId } = opts;
+    const { projectId, environmentId } = opts;
 
     const project = await this.projectRepo.findById(projectId);
     if (!project) {
       throw new NotFoundError(`Project ${projectId}`);
     }
 
-    if (!(await this.acquireLock(projectId))) {
-      throw new ConflictError(`Deployment already in progress for project ${projectId}`);
+    const envRow = await this.envRepo.findById(environmentId);
+    if (!envRow || envRow.projectId !== projectId) {
+      throw new NotFoundError(`Environment ${environmentId}`);
+    }
+
+    if (!(await this.acquireLock(environmentId))) {
+      throw new ConflictError(`Deployment already in progress for environment ${environmentId}`);
     }
 
     let deploymentId: string | undefined;
 
     try {
-      logger.info({ projectId, name: project.name }, "Starting deployment pipeline");
+      logger.info({ projectId, environmentId, name: project.name }, "Starting deployment pipeline");
 
-      const prodEnv = await this.envRepo.findProductionForProject(projectId);
-      if (!prodEnv) {
-        throw new DeploymentError("No Production environment — run DB migrations");
-      }
-
-      // ── Step 1: Prepare source ─────────────────────────────────────────────
-      logger.info({ projectId, step: 1 }, "Preparing source code");
-      await this.git.prepareSource(project, prodEnv.branch);
-      this.checkCancelled(projectId);
+      logger.info({ projectId, environmentId, step: 1 }, "Preparing source code");
+      await this.git.prepareSource(project, envRow.branch);
+      this.checkCancelled(environmentId);
       const repoRoot = this.git.projectPath(project);
       const buildContextPath = await ensureDockerfile(
         this.git.buildContextPath(project),
-        prodEnv.appPort,
+        envRow.appPort,
         repoRoot
       );
 
-      // ── Step 2: Determine color and port ───────────────────────────────────
-      const activeDeployment = await this.repo.findActiveForEnvironment(prodEnv.id);
+      const activeDeployment = await this.repo.findActiveForEnvironment(environmentId);
       const newColor =
         activeDeployment?.color === DeploymentColor.BLUE
           ? DeploymentColor.GREEN
           : DeploymentColor.BLUE;
-      const hostPort =
-        newColor === DeploymentColor.BLUE ? prodEnv.basePort : prodEnv.basePort + 1;
-      const containerName = `${containerBaseName(project.name, prodEnv)}-${newColor.toLowerCase()}`;
+      const hostPort = newColor === DeploymentColor.BLUE ? envRow.basePort : envRow.basePort + 1;
+      const containerName = `${project.name}-${envRow.name}-${newColor.toLowerCase()}`;
       const imageTag = `versiongate-${project.name}:${Date.now()}`;
-      const version = await this.repo.getNextVersionForProject(projectId);
+      const version = await this.repo.getNextVersionForEnvironment(environmentId);
 
       logger.info(
-        { projectId, step: 2, newColor, hostPort, containerName, imageTag },
+        { projectId, environmentId, step: 2, newColor, hostPort, containerName, imageTag },
         "Determined deployment target"
       );
 
-      // ── Step 3: Create DEPLOYING record ───────────────────────────────────
       const deployment = await this.repo.create({
         version,
         imageTag,
@@ -113,20 +92,15 @@ export class DeploymentService {
         port: hostPort,
         color: newColor,
         status: DeploymentStatus.DEPLOYING,
-        project: { connect: { id: projectId } },
-        environment: { connect: { id: prodEnv.id } },
+        environment: { connect: { id: environmentId } },
       });
       deploymentId = deployment.id;
 
-      // ── Step 4: Build image ────────────────────────────────────────────────
-      logger.info({ projectId, step: 4, imageTag, buildContextPath }, "Building Docker image");
+      logger.info({ projectId, environmentId, step: 4, imageTag, buildContextPath }, "Building Docker image");
       await buildImage(imageTag, buildContextPath);
-      this.checkCancelled(projectId);
+      this.checkCancelled(environmentId);
 
-      // ── Step 5: Start container ────────────────────────────────────────────
-      logger.info({ projectId, step: 5, containerName, hostPort }, "Starting container");
-      // Pre-cleanup: remove any stale container with the same name AND free the
-      // target port so we never hit "port already allocated".
+      logger.info({ projectId, environmentId, step: 5, containerName, hostPort }, "Starting container");
       await stopContainer(containerName).catch(() => null);
       await removeContainer(containerName).catch(() => null);
       await freeHostPort(hostPort);
@@ -139,22 +113,25 @@ export class DeploymentService {
         containerName,
         imageTag,
         hostPort,
-        prodEnv.appPort,
+        envRow.appPort,
         config.dockerNetwork,
         projectEnv
       );
-      this.checkCancelled(projectId);
+      this.checkCancelled(environmentId);
 
-      // ── Step 6: Switch traffic ─────────────────────────────────────────────
-      logger.info({ projectId, step: 6, hostPort }, "Switching traffic");
-      await this.traffic.switchTrafficTo(hostPort);
+      const switchPublicTraffic = envRow.name === DEFAULT_ENVIRONMENT_NAME;
+      if (switchPublicTraffic) {
+        logger.info({ projectId, environmentId, step: 6, hostPort }, "Switching traffic");
+        await this.traffic.switchTrafficTo(hostPort);
+      } else {
+        logger.info({ projectId, environmentId, envName: envRow.name }, "Skipping traffic switch (non-production)");
+      }
 
-      // ── Step 7: Activate new, retire old ──────────────────────────────────
       await this.repo.updateStatus(deployment.id, DeploymentStatus.ACTIVE);
 
       if (activeDeployment) {
         logger.info(
-          { projectId, step: 7, oldContainer: activeDeployment.containerName },
+          { projectId, environmentId, step: 7, oldContainer: activeDeployment.containerName },
           "Stopping old container"
         );
         await stopContainer(activeDeployment.containerName).catch((err) => {
@@ -167,7 +144,7 @@ export class DeploymentService {
       }
 
       logger.info(
-        { projectId, deploymentId: deployment.id, containerName },
+        { projectId, environmentId, deploymentId: deployment.id, containerName },
         "Deployment successful"
       );
 
@@ -176,7 +153,6 @@ export class DeploymentService {
         message: `Deployment successful — ${containerName} is live on port ${hostPort}`,
       };
     } catch (err) {
-      // Mark FAILED with the error message so the dashboard can display it
       if (deploymentId) {
         const errMsg = err instanceof Error ? err.message : String(err);
         await this.repo
@@ -185,46 +161,44 @@ export class DeploymentService {
       }
       throw err;
     } finally {
-      DeploymentService.cancelRequests.delete(projectId);
-      await this.releaseLock(projectId);
+      DeploymentService.cancelRequests.delete(environmentId);
+      await this.releaseLock(environmentId);
     }
   }
 
-  /**
-   * Requests cancellation of the in-progress deployment for a project.
-   * Marks the flag (so the pipeline throws on the next checkpoint) and
-   * stops the container immediately so health-check retries exit fast.
-   */
   async cancelDeploy(projectId: string): Promise<{ cancelled: boolean }> {
-    const deploying = await this.repo.findDeployingForProject(projectId);
+    const defaultEnv = await this.envRepo.findDefaultForProject(projectId);
+    if (!defaultEnv) {
+      throw new NotFoundError(`No default environment for project ${projectId}`);
+    }
+
+    const deploying = await this.repo.findDeployingForEnvironment(defaultEnv.id);
 
     if (!deploying) {
       throw new NotFoundError(`No in-progress deployment found for project ${projectId}`);
     }
 
-    // Signal the running pipeline to stop if this process is handling it.
-    DeploymentService.cancelRequests.add(projectId);
+    DeploymentService.cancelRequests.add(defaultEnv.id);
 
-    // Stop + remove the container regardless (handles stale DEPLOYING records too)
     if (deploying.containerName) {
       await stopContainer(deploying.containerName).catch(() => null);
       await removeContainer(deploying.containerName).catch(() => null);
     }
 
-    // Mark the deployment as FAILED so the UI unblocks
     await this.repo.updateStatus(deploying.id, DeploymentStatus.FAILED, "Cancelled by user").catch(() => null);
 
-    // Release the persisted lock so a fresh deploy can start.
-    await this.releaseLock(projectId);
-    DeploymentService.cancelRequests.delete(projectId);
+    await this.releaseLock(defaultEnv.id);
+    DeploymentService.cancelRequests.delete(defaultEnv.id);
 
-    logger.info({ projectId, deploymentId: deploying.id }, "Deployment cancelled");
+    logger.info({ projectId, environmentId: defaultEnv.id, deploymentId: deploying.id }, "Deployment cancelled");
     return { cancelled: true };
   }
 
   async getActiveDeployment(projectId?: string): Promise<Deployment | null> {
     if (projectId) {
-      return this.repo.findActiveForProject(projectId);
+      const env = await this.envRepo.findDefaultForProject(projectId);
+      if (!env) return null;
+      return this.repo.findActiveForEnvironment(env.id);
     }
     return this.repo.findAll().then((all) => all.find((d) => d.status === DeploymentStatus.ACTIVE) ?? null);
   }
@@ -236,26 +210,26 @@ export class DeploymentService {
     return this.repo.findAll();
   }
 
-  private checkCancelled(projectId: string): void {
-    if (DeploymentService.cancelRequests.has(projectId)) {
+  private checkCancelled(environmentId: string): void {
+    if (DeploymentService.cancelRequests.has(environmentId)) {
       throw new DeploymentError("Cancelled by user");
     }
   }
 
-  private async acquireLock(projectId: string): Promise<boolean> {
-    const acquired = await this.projectRepo.acquireDeployLock(projectId);
+  private async acquireLock(environmentId: string): Promise<boolean> {
+    const acquired = await this.envRepo.acquireDeployLock(environmentId);
 
     if (!acquired) {
-      logger.warn({ projectId }, "Deploy lock already held — rejecting concurrent deploy");
+      logger.warn({ environmentId }, "Deploy lock already held — rejecting concurrent deploy");
       return false;
     }
 
-    logger.info({ projectId }, "Deploy lock acquired");
+    logger.info({ environmentId }, "Deploy lock acquired");
     return true;
   }
 
-  private async releaseLock(projectId: string): Promise<void> {
-    await this.projectRepo.releaseDeployLock(projectId);
-    logger.info({ projectId }, "Deploy lock released");
+  private async releaseLock(environmentId: string): Promise<void> {
+    await this.envRepo.releaseDeployLock(environmentId);
+    logger.info({ environmentId }, "Deploy lock released");
   }
 }

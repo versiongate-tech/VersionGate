@@ -45,10 +45,10 @@ export function EnvironmentChain({
 
   const sorted = [...environments].sort((a, b) => a.chainOrder - b.chainOrder);
 
-  const onPromote = async (envId: string) => {
-    setPromotingId(envId);
+  const onPromote = async (targetEnvId: string, sourceEnvId: string) => {
+    setPromotingId(targetEnvId);
     try {
-      const r = await promoteEnvironment(projectId, envId);
+      const r = await promoteEnvironment(projectId, targetEnvId, sourceEnvId);
       toast.success(`Promotion queued — job ${r.jobId.slice(0, 8)}…`);
       await onRefresh();
       navigate(`/projects/${projectId}/deploy/${r.jobId}`);
@@ -119,7 +119,7 @@ export function EnvironmentChain({
                         <Button
                           size="sm"
                           disabled={promoteDisabled}
-                          onClick={() => void onPromote(env.id)}
+                          onClick={() => upstream && void onPromote(env.id, upstream.id)}
                           title={
                             !upstreamActive
                               ? `Wait until ${upstream?.name ?? "upstream"} has an ACTIVE deployment`
