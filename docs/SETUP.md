@@ -72,6 +72,7 @@ After success, open the dashboard from `/`. The wizard is intended for initial b
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `DIRECT_DATABASE_URL` | No | — | Unpooled URL (e.g. Neon direct) used **only** for `prisma migrate deploy` during startup/self-update — avoids P1002 advisory-lock timeouts on poolers |
 | `PORT` | No | `9090` | API + dashboard server port |
 | `DOCKER_NETWORK` | No | `versiongate-net` | Docker network for containers |
 | `NGINX_CONFIG_PATH` | No | `/etc/nginx/conf.d/upstream.conf` | Nginx upstream file path |
@@ -81,7 +82,7 @@ After success, open the dashboard from `/`. The wizard is intended for initial b
 | `GEMINI_API_KEY` | No | — | Google AI Studio key for CI pipeline generation |
 | `GEMINI_MODEL` | No | `gemini-2.5-pro` | Gemini model ID |
 | `LOG_LEVEL` | No | `info` | Pino log level (`trace` `debug` `info` `warn` `error`) |
-| `PRISMA_SCHEMA_SYNC` | No | `migrate` | `migrate` = `prisma migrate deploy` (optional `db push` fallback except P3005/P3009/baseline); `push` = `db push` only (legacy / dev) |
+| `PRISMA_SCHEMA_SYNC` | No | `migrate` | `migrate` = `prisma migrate deploy` (optional `db push` fallback except baseline / P1001 / P1002 / advisory lock); `push` = `db push` only (legacy / dev) |
 
 ---
 

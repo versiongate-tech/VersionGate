@@ -504,6 +504,24 @@ export function Settings() {
                 autoComplete="off"
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="env-direct-database-url">
+                DIRECT_DATABASE_URL{" "}
+                <span className="font-normal text-muted-foreground/80">(optional, Neon unpooled)</span>
+              </label>
+              <textarea
+                id="env-direct-database-url"
+                value={envDraft.DIRECT_DATABASE_URL ?? ""}
+                onChange={(e) => setEnvField("DIRECT_DATABASE_URL", e.target.value)}
+                className={textareaClass}
+                placeholder="postgresql://…-direct… or non-pooler host — used only for prisma migrate deploy on startup/self-update"
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">
+                When set, migrate runs against this URL so advisory locks work. Keep <code className="rounded bg-muted px-1 font-mono text-[0.7rem]">DATABASE_URL</code> as the
+                pooler for the app.
+              </p>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="env-enc">

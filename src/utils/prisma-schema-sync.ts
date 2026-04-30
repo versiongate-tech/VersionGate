@@ -6,6 +6,13 @@ export type PrismaSchemaSyncMode = "migrate" | "push";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
+/** Prisma Migrate needs a real DB session for advisory locks — Neon pooler URLs often hit P1002. */
+function envForMigrateDeploy(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const direct = base.DIRECT_DATABASE_URL?.trim();
+  if (!direct) return base;
+  return { ...base, DATABASE_URL: direct };
+}
+
 /**
  * Applies Prisma schema changes: prefer `migrate deploy` (versioned migrations in repo),
  * with optional fallback to `db push` for databases that predate migration history.
@@ -35,10 +42,15 @@ export function runPrismaSchemaSync(options: {
     return;
   }
 
+  const migrateEnv = envForMigrateDeploy(env);
+  if (env.DIRECT_DATABASE_URL?.trim()) {
+    logger.info("prisma migrate deploy: using DIRECT_DATABASE_URL as DATABASE_URL (avoids pooler advisory-lock timeouts)");
+  }
+
   try {
     execSync("bunx prisma migrate deploy", {
       cwd,
-      env,
+      env: migrateEnv,
       stdio: "pipe",
       timeout,
     });
@@ -50,14 +62,18 @@ export function runPrismaSchemaSync(options: {
     }
     // P3005 = DB never baselined for Migrate; push would emit wrong one-shot DDL (e.g. NOT NULL
     // without the backfill steps in versioned migrations). Do not fall back to db push.
+    // P1001/P1002 = connectivity / advisory lock (Neon pooler) — push is the wrong recovery; use DIRECT_DATABASE_URL.
     const noPushFallback =
       /\bP3005\b/i.test(msg) ||
       /\bP3009\b/i.test(msg) ||
-      /baseline an existing production database/i.test(msg);
+      /\bP1001\b/i.test(msg) ||
+      /\bP1002\b/i.test(msg) ||
+      /baseline an existing production database/i.test(msg) ||
+      /advisory lock/i.test(msg);
     if (noPushFallback) {
       logger.error(
         { err: msg },
-        "prisma migrate deploy failed (baseline / migration history). Not using db push fallback — baseline this database then run migrate deploy (see docs/database-migrations.md)."
+        "prisma migrate deploy failed (baseline / migration history / DB reachability / advisory lock). Not using db push fallback — fix DATABASE_URL connectivity, set DIRECT_DATABASE_URL (Neon unpooled) for migrate, or baseline the DB (see docs/database-migrations.md)."
       );
       throw firstErr;
     }

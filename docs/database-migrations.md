@@ -8,7 +8,7 @@ On startup (when `DATABASE_URL` is set), the engine runs schema sync from [`src/
 
 | `PRISMA_SCHEMA_SYNC` | Behavior |
 |----------------------|----------|
-| `migrate` (default) | Runs `bunx prisma migrate deploy`. On some failures it falls back to `bunx prisma db push --accept-data-loss` (legacy / drifted DBs). **No fallback** on P3005 / P3009 / baseline errors — `db push` cannot replay multi-step migrations (e.g. data backfills). |
+| `migrate` (default) | Runs `bunx prisma migrate deploy` (uses **`DIRECT_DATABASE_URL`** as `DATABASE_URL` for that subprocess when set — see Neon below). On some failures it falls back to `db push`. **No fallback** on P3005 / P3009 / P1001 / P1002 / baseline / advisory-lock errors. |
 | `push` | Runs **only** `bunx prisma db push --accept-data-loss` — no migration history required. Use only when you accept push-only discipline for that install. |
 
 Set in `.env`:
@@ -37,6 +37,10 @@ After baselining, keep using **versioned migrations** for all future schema chan
 If you intentionally do not use migration history (e.g. ephemeral dev), set `PRISMA_SCHEMA_SYNC=push`. Startup will skip `migrate deploy` and use **`db push`** only. This is weaker for multi-environment discipline and is **not** recommended for regulated production unless you accept that tradeoff.
 
 ## Neon: pooler timeouts and advisory locks
+
+VersionGate reads optional **`DIRECT_DATABASE_URL`** from `.env`. When present, **`prisma migrate deploy`** (startup and self-update) runs with `DATABASE_URL` temporarily set to that value so Prisma can acquire **PostgreSQL advisory locks** reliably. The running API and Prisma client continue to use the normal pooled **`DATABASE_URL`**.
+
+Add the direct connection string from the Neon console (non-pooler / `-direct` host). You can edit it in **Settings → Update server environment** on the dashboard.
 
 Neon (and similar poolers) often expose:
 

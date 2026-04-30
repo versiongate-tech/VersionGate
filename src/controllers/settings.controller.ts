@@ -92,6 +92,7 @@ export async function getInstanceSettingsHandler(
 /** Keys permitted to merge into the server `.env` file from the dashboard. */
 const PATCHABLE_ENV_KEYS = new Set([
   "DATABASE_URL",
+  "DIRECT_DATABASE_URL",
   "ENCRYPTION_KEY",
   "GEMINI_API_KEY",
   "GEMINI_MODEL",

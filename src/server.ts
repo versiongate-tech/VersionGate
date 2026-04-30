@@ -72,6 +72,12 @@ async function start(): Promise<void> {
     }
 
     await app.listen({ port: PORT, host: "0.0.0.0" });
+    try {
+      const srv = app.server as import("node:net").Server & { setMaxListeners?: (n: number) => void };
+      srv.setMaxListeners?.(48);
+    } catch {
+      /* ignore */
+    }
     logger.info(
       {
         port: PORT,
