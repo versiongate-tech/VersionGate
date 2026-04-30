@@ -31,14 +31,15 @@ export interface EnvironmentChainProps {
   projectId: string;
   environments: EnvironmentSummary[];
   onRefresh: () => Promise<void>;
-  onDeployToDev: () => Promise<void>;
+  /** Deploy/build for the leftmost environment in the chain (not always named “development”). */
+  onDeployToEnvironment: (environmentId: string) => Promise<void>;
 }
 
 export function EnvironmentChain({
   projectId,
   environments,
   onRefresh,
-  onDeployToDev,
+  onDeployToEnvironment,
 }: EnvironmentChainProps) {
   const navigate = useNavigate();
   const [promotingId, setPromotingId] = useState<string | null>(null);
@@ -64,86 +65,85 @@ export function EnvironmentChain({
   }
 
   return (
-    <Card className="border-border/50 bg-card/60 ring-1 ring-border/25">
-      <CardHeader>
-        <CardTitle className="text-base">Environment chain</CardTitle>
-        <CardDescription>
-          Dev → staging → production. Promote reuses the upstream Docker image without rebuilding (
-          <span className="font-mono text-xs">POST /environments/:id/promote</span>).
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch">
-          {sorted.map((env, index) => {
-            const upstream = index > 0 ? sorted[index - 1] : null;
-            const upstreamActive = upstream?.activeDeployment?.status === "ACTIVE";
-            const active = env.activeDeployment;
-            const showPromote = index > 0;
-            const promoteDisabled = !upstreamActive || promotingId !== null;
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        <strong className="text-foreground/80">Promote</strong> reuses the upstream Docker image (no rebuild).{" "}
+        <span className="font-mono text-[0.7rem] opacity-80">POST /projects/…/environments/:id/promote</span>
+      </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch">
+        {sorted.map((env, index) => {
+          const upstream = index > 0 ? sorted[index - 1] : null;
+          const upstreamActive = upstream?.activeDeployment?.status === "ACTIVE";
+          const active = env.activeDeployment;
+          const showPromote = index > 0;
+          const promoteDisabled = !upstreamActive || promotingId !== null;
 
-            return (
-              <div key={env.id} className="flex flex-1 min-w-[200px] flex-col gap-3 sm:flex-row sm:items-stretch">
-                {index > 0 ? <ChainArrow /> : null}
-                <Card className="flex-1 border-border/40 bg-background/40">
-                  <CardHeader className="pb-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-sm font-medium">{env.name}</CardTitle>
-                      {active ? <StatusBadge status={active.status} /> : <StatusBadge status="PENDING" />}
+          return (
+            <div key={env.id} className="flex flex-1 min-w-[200px] flex-col gap-3 sm:flex-row sm:items-stretch">
+              {index > 0 ? <ChainArrow /> : null}
+              <Card className="flex-1 border-border/40 bg-background/40">
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="text-sm font-medium">{env.name}</CardTitle>
+                    {active ? <StatusBadge status={active.status} /> : <StatusBadge status="PENDING" />}
+                  </div>
+                  <CardDescription className="font-mono text-xs">
+                    Branch {env.branch} · host ports {env.basePort}–{env.basePort + 1}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-0">
+                  {active ? (
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <p>
+                        <span className="text-foreground/80">Version</span>{" "}
+                        <span className="font-mono tabular-nums">v{active.version}</span>
+                      </p>
+                      <p className="truncate font-mono" title={active.imageTag}>
+                        {active.imageTag}
+                      </p>
                     </div>
-                    <CardDescription className="font-mono text-xs">
-                      Branch {env.branch} · host ports {env.basePort}–{env.basePort + 1}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3 pt-0">
-                    {active ? (
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        <p>
-                          <span className="text-foreground/80">Version</span>{" "}
-                          <span className="font-mono tabular-nums">v{active.version}</span>
-                        </p>
-                        <p className="truncate font-mono" title={active.imageTag}>
-                          {active.imageTag}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No deployment yet.</p>
-                    )}
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No deployment yet.</p>
+                  )}
 
-                    <div className="flex flex-wrap gap-2">
-                      {index === 0 ? (
-                        <Button size="sm" variant="secondary" onClick={() => void onDeployToDev()}>
-                          Deploy to dev
-                        </Button>
-                      ) : null}
-                      {showPromote ? (
-                        <Button
-                          size="sm"
-                          disabled={promoteDisabled}
-                          onClick={() => upstream && void onPromote(env.id, upstream.id)}
-                          title={
-                            !upstreamActive
-                              ? `Wait until ${upstream?.name ?? "upstream"} has an ACTIVE deployment`
-                              : undefined
-                          }
-                        >
-                          {promotingId === env.id ? (
-                            <>
-                              <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
-                              Promoting…
-                            </>
-                          ) : (
-                            "Promote"
-                          )}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+                  <div className="flex flex-wrap gap-2">
+                    {index === 0 ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void onDeployToEnvironment(env.id)}
+                      >
+                        Deploy to {env.name}
+                      </Button>
+                    ) : null}
+                    {showPromote ? (
+                      <Button
+                        size="sm"
+                        disabled={promoteDisabled}
+                        onClick={() => upstream && void onPromote(env.id, upstream.id)}
+                        title={
+                          !upstreamActive
+                            ? `Wait until ${upstream?.name ?? "upstream"} has an ACTIVE deployment`
+                            : undefined
+                        }
+                      >
+                        {promotingId === env.id ? (
+                          <>
+                            <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
+                            Promoting…
+                          </>
+                        ) : (
+                          "Promote"
+                        )}
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
