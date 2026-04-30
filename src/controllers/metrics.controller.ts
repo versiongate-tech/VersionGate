@@ -1,11 +1,13 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 import { ProjectRepository } from "../repositories/project.repository";
+import { EnvironmentRepository } from "../repositories/environment.repository";
 import { getContainerStats, getContainerLogs } from "../utils/docker";
 import { logger } from "../utils/logger";
 
 const deploymentRepo = new DeploymentRepository();
 const projectRepo = new ProjectRepository();
+const envRepo = new EnvironmentRepository();
 
 interface ProjectParams {
   id: string;
@@ -58,7 +60,8 @@ export async function getProjectMetricsHandler(
     return reply.code(404).send({ error: "NotFound", message: "Project not found" });
   }
 
-  const active = await deploymentRepo.findActiveForProject(req.params.id);
+  const defaultEnv = await envRepo.findDefaultForProject(req.params.id);
+  const active = defaultEnv ? await deploymentRepo.findActiveForEnvironment(defaultEnv.id) : null;
   if (!active) {
     return reply.code(200).send({ ...EMPTY_METRICS, timestamp: new Date().toISOString() });
   }
@@ -101,8 +104,12 @@ export async function getProjectLogsHandler(
 
   // Prefer the active deployment; fall back to the most recent one of any
   // status so failed container logs are still visible in the dashboard.
-  const active = await deploymentRepo.findActiveForProject(req.params.id);
-  const target = active ?? (await deploymentRepo.findAllForProject(req.params.id))[0] ?? null;
+  const defaultEnv = await envRepo.findDefaultForProject(req.params.id);
+  const active = defaultEnv ? await deploymentRepo.findActiveForEnvironment(defaultEnv.id) : null;
+  const target =
+    active ??
+    (defaultEnv ? (await deploymentRepo.findAllForEnvironment(defaultEnv.id))[0] : null) ??
+    null;
 
   if (!target) {
     return reply.code(200).send({ lines: [], containerName: null });

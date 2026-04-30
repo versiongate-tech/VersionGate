@@ -47,6 +47,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     /^\/api\/v1\/jobs\/[^/]+$/,
     /^\/api\/v1\/projects\/[^/]+$/,
     /^\/api\/v1\/projects\/[^/]+\/deployments$/,
+    /^\/api\/v1\/projects\/[^/]+\/environments$/,
     /^\/api\/v1\/projects\/[^/]+\/jobs$/,
     /^\/api\/v1\/projects\/[^/]+\/metrics$/,
   ];

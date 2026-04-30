@@ -1,11 +1,25 @@
-import { DeploymentStatus, Project, Prisma } from "@prisma/client";
+import { Project, Prisma } from "@prisma/client";
 import prisma from "../prisma/client";
 import { encrypt } from "../utils/crypto";
 import { decryptProjectEnv, parseProjectEnv } from "../utils/env";
+import { DEFAULT_ENVIRONMENT_NAME } from "./environment.repository";
 
 export class ProjectRepository {
   async create(data: Prisma.ProjectCreateInput): Promise<Project> {
-    const project = await prisma.project.create({ data: this.prepareCreateData(data) });
+    const project = await prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({ data: this.prepareCreateData(data) });
+      await tx.environment.create({
+        data: {
+          name: DEFAULT_ENVIRONMENT_NAME,
+          projectId: created.id,
+          branch: created.branch,
+          serverHost: "localhost",
+          basePort: created.basePort,
+          appPort: created.appPort,
+        },
+      });
+      return created;
+    });
     return this.hydrateProject(project);
   }
 
@@ -52,40 +66,8 @@ export class ProjectRepository {
   }
 
   async delete(id: string): Promise<Project> {
-    await prisma.job.deleteMany({ where: { projectId: id } });
-    await prisma.deployment.deleteMany({ where: { projectId: id } });
     const project = await prisma.project.delete({ where: { id } });
     return this.hydrateProject(project);
-  }
-
-  async acquireDeployLock(id: string): Promise<boolean> {
-    const { count } = await prisma.project.updateMany({
-      where: { id, lockedAt: null } as Prisma.ProjectWhereInput,
-      data: { lockedAt: new Date() } as Prisma.ProjectUpdateManyMutationInput,
-    });
-
-    return count === 1;
-  }
-
-  async releaseDeployLock(id: string): Promise<void> {
-    await prisma.project.updateMany({
-      where: { id },
-      data: { lockedAt: null } as Prisma.ProjectUpdateManyMutationInput,
-    });
-  }
-
-  async clearStaleDeployLocks(): Promise<number> {
-    const { count } = await prisma.project.updateMany({
-      where: {
-        lockedAt: { not: null },
-        deployments: {
-          none: { status: DeploymentStatus.DEPLOYING },
-        },
-      } as Prisma.ProjectWhereInput,
-      data: { lockedAt: null } as Prisma.ProjectUpdateManyMutationInput,
-    });
-
-    return count;
   }
 
   private prepareCreateData(data: Prisma.ProjectCreateInput): Prisma.ProjectCreateInput {

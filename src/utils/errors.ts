@@ -24,6 +24,14 @@ export class ConflictError extends AppError {
   }
 }
 
+/** HTTP 423 — resource locked (e.g. deployment in progress on target environment). */
+export class LockedError extends AppError {
+  constructor(message: string) {
+    super(message, 423, "LOCKED");
+    this.name = "LockedError";
+  }
+}
+
 export class DeploymentError extends AppError {
   constructor(message: string) {
     super(message, 422, "DEPLOYMENT_ERROR");

@@ -1,9 +1,11 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { ProjectRepository } from "../repositories/project.repository";
+import { EnvironmentRepository } from "../repositories/environment.repository";
 import { enqueueJob } from "../services/job-queue";
 import { logger } from "../utils/logger";
 
 const projectRepo = new ProjectRepository();
+const envRepo = new EnvironmentRepository();
 
 interface WebhookParams {
   secret: string;
@@ -36,14 +38,29 @@ export async function githubWebhookHandler(
   // Only deploy when pushed to the configured branch
   const ref = req.body?.ref ?? "";
   const pushedBranch = ref.replace("refs/heads/", "");
-  if (pushedBranch && pushedBranch !== project.branch) {
-    logger.info({ projectId: project.id, pushedBranch, configuredBranch: project.branch }, "Webhook: branch mismatch — skipping");
-    return reply.code(200).send({ skipped: true, reason: `Push to '${pushedBranch}', project tracks '${project.branch}'` });
+  const defaultEnv = await envRepo.findDefaultForProject(project.id);
+  if (!defaultEnv) {
+    logger.error({ projectId: project.id }, "Webhook: no default environment — skipping deploy");
+    return reply.code(500).send({ error: "Misconfigured", message: "Project has no default environment" });
   }
 
-  logger.info({ projectId: project.id, projectName: project.name, ref }, "Webhook: triggering auto-deploy");
+  if (pushedBranch && pushedBranch !== defaultEnv.branch) {
+    logger.info(
+      { projectId: project.id, pushedBranch, configuredBranch: defaultEnv.branch },
+      "Webhook: branch mismatch — skipping"
+    );
+    return reply.code(200).send({
+      skipped: true,
+      reason: `Push to '${pushedBranch}', environment tracks '${defaultEnv.branch}'`,
+    });
+  }
 
-  enqueueJob("DEPLOY", project.id, {}).catch((err) => {
+  logger.info(
+    { projectId: project.id, projectName: project.name, environmentId: defaultEnv.id, ref },
+    "Webhook: triggering auto-deploy"
+  );
+
+  enqueueJob("DEPLOY", project.id, {}, defaultEnv.id).catch((err) => {
     logger.error({ projectId: project.id, err }, "Webhook: failed to enqueue deploy job");
   });
 

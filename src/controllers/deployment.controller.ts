@@ -2,21 +2,43 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { DeploymentService } from "../services/deployment.service";
 import { enqueueJob } from "../services/job-queue";
 import { logger } from "../utils/logger";
+import { EnvironmentRepository, DEFAULT_ENVIRONMENT_NAME } from "../repositories/environment.repository";
 
 const deploymentService = new DeploymentService();
+const envRepo = new EnvironmentRepository();
 
 interface DeployBody {
   projectId: string;
+  environmentId?: string;
+}
+
+async function resolveEnvironmentId(projectId: string, environmentId?: string): Promise<string | null> {
+  if (environmentId) {
+    const env = await envRepo.findById(environmentId);
+    if (!env || env.projectId !== projectId) return null;
+    return env.id;
+  }
+  const def = await envRepo.findDefaultForProject(projectId);
+  return def?.id ?? null;
 }
 
 export async function deployHandler(
   req: FastifyRequest<{ Body: DeployBody }>,
   reply: FastifyReply
 ): Promise<void> {
-  const { projectId } = req.body;
-  const jobId = await enqueueJob("DEPLOY", projectId, {});
-  logger.info({ projectId, jobId }, "API: deploy enqueued");
-  reply.code(202).send({ jobId, status: "PENDING" });
+  const { projectId, environmentId: bodyEnvId } = req.body;
+  const resolved = await resolveEnvironmentId(projectId, bodyEnvId);
+  if (!resolved) {
+    return reply.code(400).send({
+      error: "ValidationError",
+      message: bodyEnvId
+        ? `Environment not found or does not belong to project`
+        : `Project has no "${DEFAULT_ENVIRONMENT_NAME}" environment`,
+    });
+  }
+  const jobId = await enqueueJob("DEPLOY", projectId, {}, resolved);
+  logger.info({ projectId, environmentId: resolved, jobId }, "API: deploy enqueued");
+  reply.code(202).send({ jobId, status: "PENDING", environmentId: resolved });
 }
 
 export async function listDeploymentsHandler(

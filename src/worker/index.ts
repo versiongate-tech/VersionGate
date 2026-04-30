@@ -3,6 +3,7 @@ import { disconnectPrisma } from "../prisma/client";
 import { appendLog, claimNextJob, failJob, recoverStuckJobs } from "../services/job-queue";
 import { runDeployJob } from "./handlers/deploy.handler";
 import { runRollbackJob } from "./handlers/rollback.handler";
+import { runPromoteJob } from "./handlers/promote.handler";
 import { logEmitter } from "../events/log-emitter";
 
 const POLL_MS = 2000;
@@ -39,6 +40,8 @@ async function processNextJob(): Promise<void> {
     await runDeployJob(job, log);
   } else if (job.type === "ROLLBACK") {
     await runRollbackJob(job, log);
+  } else if (job.type === "PROMOTE") {
+    await runPromoteJob(job, log);
   } else {
     await log(`Unknown job type: ${job.type}`);
     await failJob(job.id, `Unknown job type: ${job.type}`);

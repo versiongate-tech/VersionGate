@@ -3,6 +3,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 import { ProjectRepository } from "../repositories/project.repository";
 import { DeploymentRepository } from "../repositories/deployment.repository";
+import { EnvironmentRepository } from "../repositories/environment.repository";
 import { freeHostPort, removeContainer, stopContainer } from "../utils/docker";
 import { enqueueJob } from "../services/job-queue";
 import { config } from "../config/env";
@@ -11,6 +12,7 @@ import { validateEnvObject } from "../utils/env";
 
 const projectRepo = new ProjectRepository();
 const deploymentRepo = new DeploymentRepository();
+const envRepo = new EnvironmentRepository();
 
 interface CreateProjectBody {
   name: string;
@@ -129,9 +131,16 @@ export async function rollbackProjectHandler(
   reply: FastifyReply
 ): Promise<void> {
   const projectId = req.params.id;
-  const jobId = await enqueueJob("ROLLBACK", projectId, {});
-  logger.info({ projectId, jobId }, "API: rollback enqueued");
-  reply.code(202).send({ jobId, status: "PENDING" });
+  const defaultEnv = await envRepo.findDefaultForProject(projectId);
+  if (!defaultEnv) {
+    return reply.code(400).send({
+      error: "ValidationError",
+      message: "Project has no default environment",
+    });
+  }
+  const jobId = await enqueueJob("ROLLBACK", projectId, {}, defaultEnv.id);
+  logger.info({ projectId, environmentId: defaultEnv.id, jobId }, "API: rollback enqueued");
+  reply.code(202).send({ jobId, status: "PENDING", environmentId: defaultEnv.id });
 }
 
 export async function updateProjectHandler(

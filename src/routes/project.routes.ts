@@ -9,6 +9,8 @@ import {
   updateProjectEnvHandler,
   generatePipelineHandler,
 } from "../controllers/project.controller";
+import { listEnvironmentsHandler } from "../controllers/environment.controller";
+import { promoteEnvironmentHandler } from "../controllers/promote.controller";
 
 const envSchema = {
   type: "object",
@@ -82,6 +84,36 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     handler: listProjectsHandler,
+  });
+
+  const environmentSchema = {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      name: { type: "string" },
+      projectId: { type: "string" },
+      branch: { type: "string" },
+      serverHost: { type: "string" },
+      basePort: { type: "number" },
+      appPort: { type: "number" },
+      lockedAt: { type: "string", nullable: true },
+      createdAt: { type: "string" },
+      updatedAt: { type: "string" },
+    },
+  };
+
+  app.get("/projects/:id/environments", {
+    schema: {
+      response: {
+        200: {
+          type: "object",
+          properties: {
+            environments: { type: "array", items: environmentSchema },
+          },
+        },
+      },
+    },
+    handler: listEnvironmentsHandler,
   });
 
   app.get("/projects/:id", {
@@ -158,10 +190,37 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             jobId: { type: "string" },
             status: { type: "string" },
+            environmentId: { type: "string" },
           },
         },
       },
     },
     handler: rollbackProjectHandler,
+  });
+
+  app.post("/projects/:id/environments/:envId/promote", {
+    schema: {
+      body: {
+        type: "object",
+        required: ["sourceEnvironmentId"],
+        properties: {
+          sourceEnvironmentId: { type: "string", minLength: 1 },
+        },
+        additionalProperties: false,
+      },
+      response: {
+        202: {
+          type: "object",
+          properties: {
+            jobId: { type: "string" },
+            status: { type: "string" },
+            environmentId: { type: "string" },
+            sourceEnvironmentId: { type: "string" },
+            imageTag: { type: "string" },
+          },
+        },
+      },
+    },
+    handler: promoteEnvironmentHandler,
   });
 }
