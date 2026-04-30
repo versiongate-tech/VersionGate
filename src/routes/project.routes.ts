@@ -86,29 +86,16 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     handler: listProjectsHandler,
   });
 
-  const environmentSchema = {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      name: { type: "string" },
-      projectId: { type: "string" },
-      branch: { type: "string" },
-      serverHost: { type: "string" },
-      basePort: { type: "number" },
-      appPort: { type: "number" },
-      lockedAt: { type: "string", nullable: true },
-      createdAt: { type: "string" },
-      updatedAt: { type: "string" },
-    },
-  };
-
   app.get("/projects/:id/environments", {
     schema: {
       response: {
         200: {
           type: "object",
           properties: {
-            environments: { type: "array", items: environmentSchema },
+            environments: {
+              type: "array",
+              items: { type: "object", additionalProperties: true },
+            },
           },
         },
       },
@@ -138,11 +125,11 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       body: {
         type: "object",
         properties: {
-          branch:       { type: "string", minLength: 1 },
+          branch: { type: "string", minLength: 1 },
           buildContext: { type: "string", minLength: 1 },
-          appPort:      { type: "integer", minimum: 1, maximum: 65535 },
-          healthPath:   { type: "string", minLength: 1 },
-          basePort:     { type: "integer", minimum: 1024, maximum: 65534 },
+          appPort: { type: "integer", minimum: 1, maximum: 65535 },
+          healthPath: { type: "string", minLength: 1 },
+          basePort: { type: "integer", minimum: 1024, maximum: 65534 },
         },
         additionalProperties: false,
       },
@@ -182,22 +169,6 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     handler: generatePipelineHandler,
   });
 
-  app.post("/projects/:id/rollback", {
-    schema: {
-      response: {
-        202: {
-          type: "object",
-          properties: {
-            jobId: { type: "string" },
-            status: { type: "string" },
-            environmentId: { type: "string" },
-          },
-        },
-      },
-    },
-    handler: rollbackProjectHandler,
-  });
-
   app.post("/projects/:id/environments/:envId/promote", {
     schema: {
       body: {
@@ -222,5 +193,21 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     handler: promoteEnvironmentHandler,
+  });
+
+  app.post("/projects/:id/rollback", {
+    schema: {
+      response: {
+        202: {
+          type: "object",
+          properties: {
+            jobId: { type: "string" },
+            status: { type: "string" },
+            environmentId: { type: "string" },
+          },
+        },
+      },
+    },
+    handler: rollbackProjectHandler,
   });
 }

@@ -2,7 +2,7 @@ import { DeploymentColor, DeploymentStatus, Environment, Job, Project } from "@p
 import { config } from "../../config/env";
 import { parseProjectEnv } from "../../utils/env";
 import { DeploymentRepository } from "../../repositories/deployment.repository";
-import { EnvironmentRepository } from "../../repositories/environment.repository";
+import { EnvironmentRepository, DEFAULT_ENVIRONMENT_NAME } from "../../repositories/environment.repository";
 import { runContainer, stopContainer, removeContainer, freeHostPort } from "../../utils/docker";
 import { DeploymentError } from "../../utils/errors";
 import { TrafficService } from "../../services/traffic.service";
@@ -158,8 +158,13 @@ export async function runPromoteJob(
     }
     await checkCancelled(deploymentId, log);
 
-    await log(`Switching traffic to port ${hostPort}`);
-    await traffic.switchTrafficTo(hostPort);
+    const switchPublicTraffic = targetEnv.name === DEFAULT_ENVIRONMENT_NAME;
+    if (switchPublicTraffic) {
+      await log(`Switching traffic to port ${hostPort}`);
+      await traffic.switchTrafficTo(hostPort);
+    } else {
+      await log(`Skipping public traffic switch (target is not ${DEFAULT_ENVIRONMENT_NAME})`);
+    }
 
     await log(`Activating deployment and retiring previous slot on target`);
     await repo.updateStatus(deployment.id, DeploymentStatus.ACTIVE);

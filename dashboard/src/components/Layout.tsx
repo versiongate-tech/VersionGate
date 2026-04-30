@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { CreateProjectModal } from "@/components/CreateProjectModal";
 import { CreateProjectLaunchContext } from "@/create-project-launch";
 import { SidebarBreadcrumbs } from "@/components/SidebarBreadcrumbs";
+import { UpdateAvailableBanner } from "@/components/UpdateAvailableBanner";
 
 const nav = [
   { to: "/", label: "Overview", end: true },
@@ -236,6 +237,7 @@ export function Layout() {
                 </button>
               </div>
             </header>
+            <UpdateAvailableBanner />
             <div className="flex w-full min-w-0 flex-1 flex-col gap-4 px-4 py-4 md:px-6 md:py-6 lg:px-8">
               {setupGate === "loading" ? (
                 <div className="flex flex-1 items-center justify-center text-muted-foreground">Loading…</div>

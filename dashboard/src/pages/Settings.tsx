@@ -82,6 +82,17 @@ export function Settings() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash === "#application-updates") {
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById("application-updates")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, []);
+
   const checkSummary = useMemo(() => {
     if (!instance) return [];
     const checks = [
@@ -273,7 +284,7 @@ export function Settings() {
         </Card>
       </div>
 
-      <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+      <Card id="application-updates" className="border-border/50 bg-card/60 ring-1 ring-border/30 scroll-mt-24">
         <CardHeader>
           <CardTitle>Application updates</CardTitle>
           <CardDescription>

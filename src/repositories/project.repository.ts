@@ -8,15 +8,33 @@ export class ProjectRepository {
   async create(data: Prisma.ProjectCreateInput): Promise<Project> {
     const project = await prisma.$transaction(async (tx) => {
       const created = await tx.project.create({ data: this.prepareCreateData(data) });
-      await tx.environment.create({
-        data: {
-          name: DEFAULT_ENVIRONMENT_NAME,
-          projectId: created.id,
-          branch: created.branch,
-          serverHost: "localhost",
-          basePort: created.basePort,
-          appPort: created.appPort,
-        },
+      await tx.environment.createMany({
+        data: [
+          {
+            name: "development",
+            projectId: created.id,
+            branch: created.branch,
+            serverHost: "localhost",
+            basePort: created.basePort + 400,
+            appPort: created.appPort,
+          },
+          {
+            name: "staging",
+            projectId: created.id,
+            branch: created.branch,
+            serverHost: "localhost",
+            basePort: created.basePort + 200,
+            appPort: created.appPort,
+          },
+          {
+            name: DEFAULT_ENVIRONMENT_NAME,
+            projectId: created.id,
+            branch: created.branch,
+            serverHost: "localhost",
+            basePort: created.basePort,
+            appPort: created.appPort,
+          },
+        ],
       });
       return created;
     });
@@ -55,14 +73,15 @@ export class ProjectRepository {
 
   /**
    * Returns the next available base port for a new project.
-   * Each project occupies 2 ports (blue = basePort, green = basePort + 1).
-   * Starts at 3100 and increments by 2 for each existing project.
+   * Each project uses Production at basePort, Staging at basePort+200, Development at basePort+400
+   * (each stage uses two consecutive host ports for blue/green).
+   * Spacing between projects is 500 to avoid overlap with sibling env port ranges.
    */
   async getNextBasePort(startPort = 3100): Promise<number> {
     const projects = await prisma.project.findMany({ select: { basePort: true } });
     if (projects.length === 0) return startPort;
     const max = Math.max(...projects.map((p) => p.basePort));
-    return max + 2;
+    return max + 500;
   }
 
   async delete(id: string): Promise<Project> {

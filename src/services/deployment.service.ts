@@ -3,7 +3,7 @@ import { config } from "../config/env";
 import { parseProjectEnv } from "../utils/env";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 import { ProjectRepository } from "../repositories/project.repository";
-import { EnvironmentRepository } from "../repositories/environment.repository";
+import { EnvironmentRepository, DEFAULT_ENVIRONMENT_NAME } from "../repositories/environment.repository";
 import { buildImage, runContainer, stopContainer, removeContainer, freeHostPort } from "../utils/docker";
 import { ensureDockerfile } from "../utils/dockerfile";
 import { logger } from "../utils/logger";
@@ -61,7 +61,7 @@ export class DeploymentService {
       logger.info({ projectId, environmentId, name: project.name }, "Starting deployment pipeline");
 
       logger.info({ projectId, environmentId, step: 1 }, "Preparing source code");
-      await this.git.prepareSource(project);
+      await this.git.prepareSource(project, envRow.branch);
       this.checkCancelled(environmentId);
       const repoRoot = this.git.projectPath(project);
       const buildContextPath = await ensureDockerfile(
@@ -119,8 +119,13 @@ export class DeploymentService {
       );
       this.checkCancelled(environmentId);
 
-      logger.info({ projectId, environmentId, step: 6, hostPort }, "Switching traffic");
-      await this.traffic.switchTrafficTo(hostPort);
+      const switchPublicTraffic = envRow.name === DEFAULT_ENVIRONMENT_NAME;
+      if (switchPublicTraffic) {
+        logger.info({ projectId, environmentId, step: 6, hostPort }, "Switching traffic");
+        await this.traffic.switchTrafficTo(hostPort);
+      } else {
+        logger.info({ projectId, environmentId, envName: envRow.name }, "Skipping traffic switch (non-production)");
+      }
 
       await this.repo.updateStatus(deployment.id, DeploymentStatus.ACTIVE);
 

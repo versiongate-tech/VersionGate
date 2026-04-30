@@ -26,8 +26,7 @@ export async function runRollbackJob(
   const project = job.project;
 
   const environment =
-    job.environment ??
-    (await envRepo.findDefaultForProject(projectId));
+    job.environment ?? (await envRepo.findDefaultForProject(projectId));
   if (!environment) {
     await failJob(jobId, `No environment for project ${projectId}`);
     await log(`No default environment — cannot rollback`);
@@ -46,7 +45,9 @@ export async function runRollbackJob(
   }
 
   try {
-    await log(`Initiating rollback for project ${project.name} (${projectId}), env ${environment.name} (${environmentId})`);
+    await log(
+      `Initiating rollback for project ${project.name} (${projectId}), env ${environment.name} (${environmentId})`
+    );
 
     const current = await repo.findActiveForEnvironment(environmentId);
     if (!current) {
@@ -62,7 +63,9 @@ export async function runRollbackJob(
       throw new BadRequestError("Already at the earliest available deployment");
     }
 
-    await log(`Rolling back from ${current.containerName} (v${current.version}) to ${previous.containerName} (v${previous.version})`);
+    await log(
+      `Rolling back from ${current.containerName} (v${current.version}) to ${previous.containerName} (v${previous.version})`
+    );
 
     await log(`Restarting previous container: ${previous.containerName}`);
     const projectEnv = parseProjectEnv(project.env);

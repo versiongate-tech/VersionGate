@@ -5,13 +5,16 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   getDeployments,
   getProject,
+  getProjectEnvironments,
   listProjectJobs,
   rollback,
   triggerDeploy,
   type Deployment,
+  type EnvironmentSummary,
   type JobRecord,
   type Project,
 } from "@/lib/api";
+import { EnvironmentChain } from "@/components/EnvironmentChain";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { BlueGreenTrafficCard } from "@/components/BlueGreenTrafficCard";
-import { getDeployingDeployment, hostPortForSlot, publicServiceUrl } from "@/lib/deployment-display";
+import { getDeployingDeployment, publicServiceUrl } from "@/lib/deployment-display";
 
 function copyText(text: string, label: string) {
   void navigator.clipboard.writeText(text).then(
@@ -47,6 +50,7 @@ export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<Project | null>(null);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -64,13 +68,16 @@ export function ProjectDetail() {
         getDeployments(id),
         listProjectJobs(id, { limit: 25 }),
       ]);
+      const envData = await getProjectEnvironments(id).catch(() => ({ environments: [] as EnvironmentSummary[] }));
       setProject(p.project ?? null);
       setDeployments(d.deployments);
+      setEnvironments(envData.environments ?? []);
       setJobs(j.jobs);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load project");
       setProject(null);
       setDeployments([]);
+      setEnvironments([]);
       setJobs([]);
     } finally {
       setLoading(false);
@@ -98,6 +105,29 @@ export function ProjectDetail() {
     return [...m.entries()].map(([name, value]) => ({ name, value }));
   }, [jobs]);
 
+  const prodChainOrder = useMemo(() => {
+    if (environments.length === 0) return null;
+    return Math.max(...environments.map((e) => e.chainOrder));
+  }, [environments]);
+
+  const prodEnvId = useMemo(() => {
+    if (prodChainOrder == null) return null;
+    return environments.find((e) => e.chainOrder === prodChainOrder)?.id ?? null;
+  }, [environments, prodChainOrder]);
+
+  const environmentNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of environments) {
+      m.set(e.id, e.name);
+    }
+    return m;
+  }, [environments]);
+
+  const productionDeployments = useMemo(() => {
+    if (!prodEnvId) return deployments;
+    return deployments.filter((d) => d.environmentId === prodEnvId || d.environmentId === undefined);
+  }, [deployments, prodEnvId]);
+
   const onDeploy = async () => {
     if (!id) return;
     try {
@@ -117,6 +147,22 @@ export function ProjectDetail() {
       navigate(`/projects/${id}/deploy/${r.jobId}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rollback failed");
+    }
+  };
+
+  const onDeployToDev = async () => {
+    if (!id) return;
+    const dev = [...environments].sort((a, b) => a.chainOrder - b.chainOrder)[0];
+    if (!dev) {
+      toast.error("No development environment configured");
+      return;
+    }
+    try {
+      const r = await triggerDeploy(id, dev.id);
+      toast.success(`Dev deploy queued — job ${r.jobId.slice(0, 8)}…`);
+      navigate(`/projects/${id}/deploy/${r.jobId}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Deploy failed");
     }
   };
 
@@ -144,22 +190,22 @@ export function ProjectDetail() {
     );
   }
 
-  const active = deployments.find((d) => d.status === "ACTIVE");
-  const deploying = id ? getDeployingDeployment(id, deployments) : undefined;
+  const active = productionDeployments.find((d) => d.status === "ACTIVE");
+  const deploying = id ? getDeployingDeployment(id, productionDeployments) : undefined;
   const displayStatus = deploying
     ? "DEPLOYING"
     : active
       ? "ACTIVE"
-      : deployments[0]?.status === "FAILED"
+      : productionDeployments[0]?.status === "FAILED"
         ? "FAILED"
-        : deployments[0]?.status === "ROLLED_BACK"
+        : productionDeployments[0]?.status === "ROLLED_BACK"
           ? "ROLLED_BACK"
           : "PENDING";
 
-  const liveHostPort = active ? hostPortForSlot(project, active.color) : null;
+  const liveHostPort = active ? active.port : null;
   const liveUrl = liveHostPort != null ? publicServiceUrl(liveHostPort) : null;
-  const totalDeploys = deployments.length;
-  const lastDeploy = deployments[0];
+  const totalDeploys = productionDeployments.length;
+  const lastDeploy = productionDeployments[0];
 
   return (
     <div className="w-full space-y-6">
@@ -267,9 +313,22 @@ export function ProjectDetail() {
         </div>
       ) : null}
 
+      {environments.length > 0 ? (
+        <EnvironmentChain
+          projectId={project.id}
+          environments={environments}
+          onRefresh={async () => {
+            await load();
+          }}
+          onDeployToDev={async () => {
+            await onDeployToDev();
+          }}
+        />
+      ) : null}
+
       <BlueGreenTrafficCard
         project={project}
-        deployments={deployments}
+        deployments={productionDeployments}
         active={active}
         deploying={deploying}
         liveHostPort={liveHostPort}
@@ -362,6 +421,7 @@ export function ProjectDetail() {
             <TableHeader>
               <TableRow className="border-border/50 hover:bg-transparent">
                 <TableHead className="pl-6">Ver</TableHead>
+                <TableHead>Environment</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Slot</TableHead>
                 <TableHead>Host port</TableHead>
@@ -373,17 +433,20 @@ export function ProjectDetail() {
             <TableBody>
               {deployments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                     No deployments yet. Run Deploy above.
                   </TableCell>
                 </TableRow>
               ) : (
                 deployments.map((d) => {
-                  const hp = hostPortForSlot(project, d.color);
+                  const hp = d.port;
                   const u = publicServiceUrl(hp);
                   return (
                     <TableRow key={d.id} className="border-border/40">
                       <TableCell className="pl-6 font-mono">v{d.version}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {d.environmentId ? environmentNameById.get(d.environmentId) ?? "—" : "—"}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <StatusBadge status={d.status} />

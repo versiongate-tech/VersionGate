@@ -104,6 +104,24 @@ export interface EnvironmentRow {
   updatedAt: string;
 }
 
+/** Response from `GET /projects/:id/environments` (chain UI + active slot). */
+export interface EnvironmentSummary {
+  id: string;
+  name: string;
+  chainOrder: number;
+  branch: string;
+  basePort: number;
+  appPort: number;
+  activeDeployment: {
+    id: string;
+    version: number;
+    imageTag: string;
+    status: DeploymentStatus;
+    port: number;
+    color: string;
+  } | null;
+}
+
 export interface JobRecord {
   id: string;
   type: string;
@@ -170,9 +188,11 @@ export function triggerDeploy(
   return request("POST", "/deploy", { projectId, ...(environmentId ? { environmentId } : {}) });
 }
 
-export function listEnvironments(projectId: string): Promise<{ environments: EnvironmentRow[] }> {
+export function listEnvironments(projectId: string): Promise<{ environments: EnvironmentSummary[] }> {
   return request("GET", `/projects/${projectId}/environments`);
 }
+
+export const getProjectEnvironments = listEnvironments;
 
 export function rollback(projectId: string): Promise<{ jobId: string; status: string; environmentId?: string }> {
   return request("POST", `/projects/${projectId}/rollback`);

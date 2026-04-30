@@ -2,7 +2,7 @@ import { DeploymentColor, DeploymentStatus, Environment, Job, Project } from "@p
 import { config } from "../../config/env";
 import { parseProjectEnv } from "../../utils/env";
 import { DeploymentRepository } from "../../repositories/deployment.repository";
-import { EnvironmentRepository } from "../../repositories/environment.repository";
+import { EnvironmentRepository, DEFAULT_ENVIRONMENT_NAME } from "../../repositories/environment.repository";
 import { buildImage, runContainer, stopContainer, removeContainer, freeHostPort } from "../../utils/docker";
 import { ensureDockerfile } from "../../utils/dockerfile";
 import { DeploymentError } from "../../utils/errors";
@@ -46,8 +46,7 @@ export async function runDeployJob(
   const project = job.project;
 
   const environment =
-    job.environment ??
-    (await envRepo.findDefaultForProject(projectId));
+    job.environment ?? (await envRepo.findDefaultForProject(projectId));
   if (!environment) {
     await failJob(jobId, `No environment for project ${projectId}`);
     await log(`No default environment — cannot deploy`);
@@ -68,14 +67,20 @@ export async function runDeployJob(
   let deploymentId: string | undefined;
 
   try {
-    await log(`Starting deployment pipeline for project ${project.name} (${projectId}), env ${environment.name} (${environmentId})`);
+    await log(
+      `Starting deployment pipeline for project ${project.name} (${projectId}), env ${environment.name} (${environmentId})`
+    );
 
-    await log(`Step 1: Preparing source code`);
-    await git.prepareSource(project);
+    await log(`Step 1: Preparing source code (branch ${environment.branch})`);
+    await git.prepareSource(project, environment.branch);
     await checkCancelled(undefined, log);
 
     const repoRoot = git.projectPath(project);
-    const buildContextPath = await ensureDockerfile(git.buildContextPath(project), environment.appPort, repoRoot);
+    const buildContextPath = await ensureDockerfile(
+      git.buildContextPath(project),
+      environment.appPort,
+      repoRoot
+    );
 
     await log(`Step 2: Determining blue/green target`);
     const activeDeployment = await repo.findActiveForEnvironment(environmentId);
@@ -138,8 +143,13 @@ export async function runDeployJob(
     }
     await checkCancelled(deploymentId, log);
 
-    await log(`Step 7: Switching traffic to port ${hostPort}`);
-    await traffic.switchTrafficTo(hostPort);
+    const switchPublicTraffic = environment.name === DEFAULT_ENVIRONMENT_NAME;
+    if (switchPublicTraffic) {
+      await log(`Step 7: Switching traffic to port ${hostPort}`);
+      await traffic.switchTrafficTo(hostPort);
+    } else {
+      await log(`Step 7: Skipping traffic switch (non-production environment)`);
+    }
 
     await log(`Step 8: Activating deployment and retiring previous slot`);
     await repo.updateStatus(deployment.id, DeploymentStatus.ACTIVE);

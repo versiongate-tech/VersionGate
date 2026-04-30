@@ -41,6 +41,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     /^\/api\/v1\/setup\/status$/,
     /^\/api\/v1\/auth\/status$/,
     /^\/api\/v1\/settings\/instance$/,
+    /^\/api\/v1\/settings\/self-update$/,
     /^\/api\/v1\/projects$/,
     /^\/api\/v1\/deployments$/,
     /^\/api\/v1\/jobs$/,
