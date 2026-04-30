@@ -19,9 +19,23 @@ export class DeploymentRepository {
     });
   }
 
+  async findActiveForEnvironment(environmentId: string): Promise<Deployment | null> {
+    return prisma.deployment.findFirst({
+      where: { environmentId, status: DeploymentStatus.ACTIVE },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   async findDeployingForProject(projectId: string): Promise<Deployment | null> {
     return prisma.deployment.findFirst({
       where: { projectId, status: DeploymentStatus.DEPLOYING },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async findDeployingForEnvironment(environmentId: string): Promise<Deployment | null> {
+    return prisma.deployment.findFirst({
+      where: { environmentId, status: DeploymentStatus.DEPLOYING },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -45,10 +59,27 @@ export class DeploymentRepository {
     });
   }
 
-  async findAllForProject(projectId: string): Promise<Deployment[]> {
+  async findPreviousForEnvironment(
+    environmentId: string,
+    currentVersion: number
+  ): Promise<Deployment | null> {
+    return prisma.deployment.findFirst({
+      where: {
+        environmentId,
+        status: DeploymentStatus.ROLLED_BACK,
+        version: { lt: currentVersion },
+      },
+      orderBy: { version: "desc" },
+    });
+  }
+
+  async findAllForProject(projectId: string): Promise<(Deployment & { environment?: { id: string; name: string; chainOrder: number } })[]> {
     return prisma.deployment.findMany({
       where: { projectId },
       orderBy: { createdAt: "desc" },
+      include: {
+        environment: { select: { id: true, name: true, chainOrder: true } },
+      },
     });
   }
 
@@ -78,9 +109,14 @@ export class DeploymentRepository {
 
   // ── Global queries (kept for status endpoint) ──────────────────────────────
 
-  async findAll(): Promise<Deployment[]> {
+  async findAll(): Promise<
+    (Deployment & { environment?: { id: string; name: string; chainOrder: number } })[]
+  > {
     return prisma.deployment.findMany({
       orderBy: { createdAt: "desc" },
+      include: {
+        environment: { select: { id: true, name: true, chainOrder: true } },
+      },
     });
   }
 

@@ -3,6 +3,7 @@ import path from "path";
 import { randomBytes } from "crypto";
 import { ProjectRepository } from "../repositories/project.repository";
 import { DeploymentRepository } from "../repositories/deployment.repository";
+import { EnvironmentRepository } from "../repositories/environment.repository";
 import { freeHostPort, removeContainer, stopContainer } from "../utils/docker";
 import { enqueueJob } from "../services/job-queue";
 import { config } from "../config/env";
@@ -11,6 +12,7 @@ import { validateEnvObject } from "../utils/env";
 
 const projectRepo = new ProjectRepository();
 const deploymentRepo = new DeploymentRepository();
+const environmentRepo = new EnvironmentRepository();
 
 interface CreateProjectBody {
   name: string;
@@ -74,6 +76,8 @@ export async function createProjectHandler(
   // Patch localPath now that we have the id
   const localPath = path.join(config.projectsRootPath, project.id);
   const updated = await projectRepo.update(project.id, { localPath });
+
+  await environmentRepo.createDefaultsForProject(updated.id, updated.branch, updated.appPort, updated.basePort);
 
   logger.info({ projectId: updated.id, name: updated.name }, "API: project created");
   reply.code(201).send({ project: updated });

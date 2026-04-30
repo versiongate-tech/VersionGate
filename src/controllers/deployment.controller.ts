@@ -7,14 +7,16 @@ const deploymentService = new DeploymentService();
 
 interface DeployBody {
   projectId: string;
+  environmentId?: string;
 }
 
 export async function deployHandler(
   req: FastifyRequest<{ Body: DeployBody }>,
   reply: FastifyReply
 ): Promise<void> {
-  const { projectId } = req.body;
-  const jobId = await enqueueJob("DEPLOY", projectId, {});
+  const { projectId, environmentId } = req.body;
+  const payload = environmentId ? { environmentId } : {};
+  const jobId = await enqueueJob("DEPLOY", projectId, payload);
   logger.info({ projectId, jobId }, "API: deploy enqueued");
   reply.code(202).send({ jobId, status: "PENDING" });
 }

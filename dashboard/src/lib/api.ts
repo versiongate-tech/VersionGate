@@ -84,8 +84,28 @@ export interface Deployment {
   status: DeploymentStatus;
   errorMessage?: string | null;
   projectId: string;
+  environmentId?: string;
+  promotedFromId?: string | null;
+  environment?: { id: string; name: string; chainOrder: number };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EnvironmentSummary {
+  id: string;
+  name: string;
+  chainOrder: number;
+  branch: string;
+  basePort: number;
+  appPort: number;
+  activeDeployment: {
+    id: string;
+    version: number;
+    imageTag: string;
+    status: DeploymentStatus;
+    port: number;
+    color: string;
+  } | null;
 }
 
 export interface JobRecord {
@@ -147,8 +167,9 @@ export function deleteProject(id: string): Promise<void> {
   return request("DELETE", `/projects/${id}`);
 }
 
-export function triggerDeploy(projectId: string): Promise<{ jobId: string; status: string }> {
-  return request("POST", "/deploy", { projectId });
+export function triggerDeploy(projectId: string, environmentId?: string): Promise<{ jobId: string; status: string }> {
+  const body = environmentId !== undefined ? { projectId, environmentId } : { projectId };
+  return request("POST", "/deploy", body);
 }
 
 export function rollback(projectId: string): Promise<{ jobId: string; status: string }> {
@@ -157,6 +178,17 @@ export function rollback(projectId: string): Promise<{ jobId: string; status: st
 
 export function getDeployments(projectId: string): Promise<{ deployments: Deployment[] }> {
   return request("GET", `/projects/${projectId}/deployments`);
+}
+
+export function getProjectEnvironments(projectId: string): Promise<{ environments: EnvironmentSummary[] }> {
+  return request("GET", `/projects/${projectId}/environments`);
+}
+
+export function promoteEnvironment(
+  projectId: string,
+  envId: string
+): Promise<{ jobId: string; status: string }> {
+  return request("POST", `/projects/${projectId}/environments/${envId}/promote`);
 }
 
 export function getAllDeployments(): Promise<{ deployments: Deployment[] }> {

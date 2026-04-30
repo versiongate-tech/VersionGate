@@ -39,9 +39,11 @@ export class GitService {
    * Ensures the project directory exists, then clones or updates the repo.
    * If the directory already contains a git repo → fetch + hard reset to remote branch.
    * If not → clone fresh.
+   * @param branchOverride optional branch (e.g. per-environment); defaults to project.branch
    */
-  async prepareSource(project: Project): Promise<void> {
-    logger.debug({ projectId: project.id, branch: project.branch }, "Preparing source");
+  async prepareSource(project: Project, branchOverride?: string): Promise<void> {
+    const branch = (branchOverride ?? project.branch).trim() || project.branch;
+    logger.debug({ projectId: project.id, branch }, "Preparing source");
 
     await this.ensureProjectDirectory(project);
 
@@ -50,13 +52,13 @@ export class GitService {
 
     if (isExisting) {
       logger.debug({ projectId: project.id }, "Repo exists — fetching latest");
-      await this.pullLatest(project, repoDir);
+      await this.pullLatest(project, repoDir, branch);
     } else {
       logger.debug({ projectId: project.id }, "Cloning repository");
-      await this.cloneRepo(project, repoDir);
+      await this.cloneRepo(project, repoDir, branch);
     }
 
-    logger.info({ projectId: project.id, branch: project.branch }, "Source ready");
+    logger.info({ projectId: project.id, branch }, "Source ready");
   }
 
   private async ensureProjectDirectory(project: Pick<Project, "id">): Promise<void> {
@@ -64,12 +66,12 @@ export class GitService {
     await fs.mkdir(dir, { recursive: true });
   }
 
-  private async cloneRepo(project: Project, repoDir: string): Promise<void> {
+  private async cloneRepo(project: Project, repoDir: string, branch: string): Promise<void> {
     const authUrl = this.buildAuthUrl(project.repoUrl);
     try {
       await execFileAsync("git", [
         "clone",
-        "--branch", project.branch,
+        "--branch", branch,
         "--single-branch",
         authUrl,
         repoDir,
@@ -80,12 +82,12 @@ export class GitService {
     }
   }
 
-  private async pullLatest(project: Project, repoDir: string): Promise<void> {
+  private async pullLatest(_project: Project, repoDir: string, branch: string): Promise<void> {
     try {
       await execFileAsync("git", ["-C", repoDir, "fetch", "origin"]);
       await execFileAsync("git", [
         "-C", repoDir,
-        "reset", "--hard", `origin/${project.branch}`,
+        "reset", "--hard", `origin/${branch}`,
       ]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

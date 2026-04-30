@@ -2,6 +2,7 @@ import { Deployment, DeploymentStatus } from "@prisma/client";
 import { parseProjectEnv } from "../utils/env";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 import { ProjectRepository } from "../repositories/project.repository";
+import { EnvironmentRepository } from "../repositories/environment.repository";
 import { TrafficService } from "./traffic.service";
 import { ValidationService } from "./validation.service";
 import { runContainer, stopContainer, removeContainer } from "../utils/docker";
@@ -18,12 +19,14 @@ export interface RollbackResult {
 export class RollbackService {
   private readonly repo: DeploymentRepository;
   private readonly projectRepo: ProjectRepository;
+  private readonly envRepo: EnvironmentRepository;
   private readonly traffic: TrafficService;
   private readonly validation: ValidationService;
 
   constructor() {
     this.repo = new DeploymentRepository();
     this.projectRepo = new ProjectRepository();
+    this.envRepo = new EnvironmentRepository();
     this.traffic = new TrafficService();
     this.validation = new ValidationService();
   }
@@ -46,12 +49,17 @@ export class RollbackService {
       throw new NotFoundError(`Project ${projectId}`);
     }
 
-    const current = await this.repo.findActiveForProject(projectId);
+    const prodEnv = await this.envRepo.findProductionForProject(projectId);
+    if (!prodEnv) {
+      throw new BadRequestError("No Production environment for project");
+    }
+
+    const current = await this.repo.findActiveForEnvironment(prodEnv.id);
     if (!current) {
       throw new BadRequestError("No active deployment to roll back from");
     }
 
-    const previous = await this.repo.findPreviousForProject(projectId, current.version);
+    const previous = await this.repo.findPreviousForEnvironment(prodEnv.id, current.version);
     if (!previous) {
       throw new BadRequestError("No previous deployment available for rollback");
     }
@@ -76,7 +84,7 @@ export class RollbackService {
       previous.containerName,
       previous.imageTag,
       previous.port,
-      project.appPort,
+      prodEnv.appPort,
       config.dockerNetwork,
       projectEnv
     );

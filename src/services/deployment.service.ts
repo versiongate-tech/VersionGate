@@ -1,14 +1,20 @@
-import { Deployment, DeploymentColor, DeploymentStatus } from "@prisma/client";
+import { Deployment, DeploymentColor, DeploymentStatus, Environment } from "@prisma/client";
 import { config } from "../config/env";
 import { parseProjectEnv } from "../utils/env";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 import { ProjectRepository } from "../repositories/project.repository";
+import { EnvironmentRepository } from "../repositories/environment.repository";
 import { buildImage, runContainer, stopContainer, removeContainer, freeHostPort } from "../utils/docker";
 import { ensureDockerfile } from "../utils/dockerfile";
 import { logger } from "../utils/logger";
 import { ConflictError, DeploymentError, NotFoundError } from "../utils/errors";
 import { TrafficService } from "./traffic.service";
 import { GitService } from "./git.service";
+
+function containerBaseName(projectName: string, env: Environment): string {
+  const slug = env.name.toLowerCase().replace(/\s+/g, "-");
+  return `${projectName}-${slug}`;
+}
 
 export interface DeployOptions {
   projectId: string;
@@ -25,12 +31,14 @@ export class DeploymentService {
 
   private readonly repo: DeploymentRepository;
   private readonly projectRepo: ProjectRepository;
+  private readonly envRepo: EnvironmentRepository;
   private readonly traffic: TrafficService;
   private readonly git: GitService;
 
   constructor() {
     this.repo = new DeploymentRepository();
     this.projectRepo = new ProjectRepository();
+    this.envRepo = new EnvironmentRepository();
     this.traffic = new TrafficService();
     this.git = new GitService();
   }
@@ -64,26 +72,31 @@ export class DeploymentService {
     try {
       logger.info({ projectId, name: project.name }, "Starting deployment pipeline");
 
+      const prodEnv = await this.envRepo.findProductionForProject(projectId);
+      if (!prodEnv) {
+        throw new DeploymentError("No Production environment — run DB migrations");
+      }
+
       // ── Step 1: Prepare source ─────────────────────────────────────────────
       logger.info({ projectId, step: 1 }, "Preparing source code");
-      await this.git.prepareSource(project);
+      await this.git.prepareSource(project, prodEnv.branch);
       this.checkCancelled(projectId);
       const repoRoot = this.git.projectPath(project);
       const buildContextPath = await ensureDockerfile(
         this.git.buildContextPath(project),
-        project.appPort,
+        prodEnv.appPort,
         repoRoot
       );
 
       // ── Step 2: Determine color and port ───────────────────────────────────
-      const activeDeployment = await this.repo.findActiveForProject(projectId);
+      const activeDeployment = await this.repo.findActiveForEnvironment(prodEnv.id);
       const newColor =
         activeDeployment?.color === DeploymentColor.BLUE
           ? DeploymentColor.GREEN
           : DeploymentColor.BLUE;
       const hostPort =
-        newColor === DeploymentColor.BLUE ? project.basePort : project.basePort + 1;
-      const containerName = `${project.name}-${newColor.toLowerCase()}`;
+        newColor === DeploymentColor.BLUE ? prodEnv.basePort : prodEnv.basePort + 1;
+      const containerName = `${containerBaseName(project.name, prodEnv)}-${newColor.toLowerCase()}`;
       const imageTag = `versiongate-${project.name}:${Date.now()}`;
       const version = await this.repo.getNextVersionForProject(projectId);
 
@@ -101,6 +114,7 @@ export class DeploymentService {
         color: newColor,
         status: DeploymentStatus.DEPLOYING,
         project: { connect: { id: projectId } },
+        environment: { connect: { id: prodEnv.id } },
       });
       deploymentId = deployment.id;
 
@@ -125,7 +139,7 @@ export class DeploymentService {
         containerName,
         imageTag,
         hostPort,
-        project.appPort,
+        prodEnv.appPort,
         config.dockerNetwork,
         projectEnv
       );

@@ -41,14 +41,15 @@ export class ProjectRepository {
 
   /**
    * Returns the next available base port for a new project.
-   * Each project occupies 2 ports (blue = basePort, green = basePort + 1).
-   * Starts at 3100 and increments by 2 for each existing project.
+   * Each project uses Production at basePort, Staging at basePort+200, Development at basePort+400
+   * (each stage uses two consecutive host ports for blue/green).
+   * Spacing between projects is 500 to avoid overlap with sibling env port ranges.
    */
   async getNextBasePort(startPort = 3100): Promise<number> {
     const projects = await prisma.project.findMany({ select: { basePort: true } });
     if (projects.length === 0) return startPort;
     const max = Math.max(...projects.map((p) => p.basePort));
-    return max + 2;
+    return max + 500;
   }
 
   async delete(id: string): Promise<Project> {

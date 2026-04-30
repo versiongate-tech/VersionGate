@@ -2,6 +2,7 @@ import { DeploymentStatus, Job, Project } from "@prisma/client";
 import { parseProjectEnv } from "../../utils/env";
 import { DeploymentRepository } from "../../repositories/deployment.repository";
 import { ProjectRepository } from "../../repositories/project.repository";
+import { EnvironmentRepository } from "../../repositories/environment.repository";
 import { TrafficService } from "../../services/traffic.service";
 import { ValidationService } from "../../services/validation.service";
 import { runContainer, stopContainer, removeContainer } from "../../utils/docker";
@@ -13,6 +14,7 @@ import { logEmitter } from "../../events/log-emitter";
 
 const repo = new DeploymentRepository();
 const projectRepo = new ProjectRepository();
+const envRepo = new EnvironmentRepository();
 const traffic = new TrafficService();
 const validation = new ValidationService();
 
@@ -33,12 +35,17 @@ export async function runRollbackJob(job: Job & { project: Project }, log: LogFn
   try {
     await log(`Initiating rollback for project ${project.name} (${projectId})`);
 
-    const current = await repo.findActiveForProject(projectId);
+    const prodEnv = await envRepo.findProductionForProject(projectId);
+    if (!prodEnv) {
+      throw new BadRequestError("No Production environment for project");
+    }
+
+    const current = await repo.findActiveForEnvironment(prodEnv.id);
     if (!current) {
       throw new BadRequestError("No active deployment to roll back from");
     }
 
-    const previous = await repo.findPreviousForProject(projectId, current.version);
+    const previous = await repo.findPreviousForEnvironment(prodEnv.id, current.version);
     if (!previous) {
       throw new BadRequestError("No previous deployment available for rollback");
     }
@@ -59,7 +66,7 @@ export async function runRollbackJob(job: Job & { project: Project }, log: LogFn
       previous.containerName,
       previous.imageTag,
       previous.port,
-      project.appPort,
+      prodEnv.appPort,
       config.dockerNetwork,
       projectEnv
     );

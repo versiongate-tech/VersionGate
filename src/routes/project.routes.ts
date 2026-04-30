@@ -9,6 +9,10 @@ import {
   updateProjectEnvHandler,
   generatePipelineHandler,
 } from "../controllers/project.controller";
+import {
+  listProjectEnvironmentsHandler,
+  promoteEnvironmentHandler,
+} from "../controllers/environment.controller";
 
 const envSchema = {
   type: "object",
@@ -148,6 +152,41 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     handler: generatePipelineHandler,
+  });
+
+  app.get("/projects/:id/environments", {
+    schema: {
+      response: {
+        200: {
+          type: "object",
+          properties: {
+            environments: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    handler: listProjectEnvironmentsHandler,
+  });
+
+  app.post("/projects/:id/environments/:envId/promote", {
+    schema: {
+      response: {
+        202: {
+          type: "object",
+          properties: {
+            jobId: { type: "string" },
+            status: { type: "string" },
+          },
+        },
+      },
+    },
+    handler: promoteEnvironmentHandler,
   });
 
   app.post("/projects/:id/rollback", {

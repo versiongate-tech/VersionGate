@@ -11,6 +11,7 @@ const deployBodySchema = {
   required: ["projectId"],
   properties: {
     projectId: { type: "string", minLength: 1 },
+    environmentId: { type: "string", minLength: 1 },
   },
   additionalProperties: false,
 };
@@ -26,6 +27,17 @@ const deploymentSchema = {
     color: { type: "string" },
     status: { type: "string" },
     projectId: { type: "string" },
+    environmentId: { type: "string" },
+    promotedFromId: { type: "string", nullable: true },
+    environment: {
+      type: "object",
+      nullable: true,
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        chainOrder: { type: "number" },
+      },
+    },
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
   },

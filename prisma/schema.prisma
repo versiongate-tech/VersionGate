@@ -41,24 +41,45 @@ model Session {
 }
 
 model Project {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  repoUrl     String
-  branch      String       @default("main")
-  localPath   String
-  appPort     Int
-  healthPath  String       @default("/health")
-  basePort    Int
-  buildContext  String       @default(".")
-  webhookSecret String?     @unique
-  env           Json        @default("{}")
+  id            String         @id @default(cuid())
+  name          String         @unique
+  repoUrl       String
+  branch        String         @default("main")
+  localPath     String
+  appPort       Int
+  healthPath    String         @default("/health")
+  basePort      Int
+  buildContext  String         @default(".")
+  webhookSecret String?        @unique
+  env           Json           @default("{}")
   lockedAt      DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  deployments Deployment[]
-  jobs        Job[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deployments   Deployment[]
+  jobs          Job[]
+  environments  Environment[]
 
   @@index([name])
+}
+
+/// Promotion pipeline stage (dev -> staging -> prod). Each has its own host port range for blue/green.
+model Environment {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  chainOrder Int
+  branch     String   @default("main")
+  serverHost String   @default("")
+  basePort   Int
+  appPort    Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  deployments Deployment[]
+
+  @@unique([projectId, chainOrder])
+  @@index([projectId])
 }
 
 // Run after schema changes: bunx prisma migrate dev --name add_job_queue
@@ -93,10 +114,16 @@ model Deployment {
   errorMessage  String?
   projectId     String
   project       Project          @relation(fields: [projectId], references: [id])
+  environmentId String
+  environment   Environment      @relation(fields: [environmentId], references: [id])
+  promotedFromId String?
+  promotedFrom   Deployment?    @relation("PromotionChain", fields: [promotedFromId], references: [id], onDelete: SetNull)
+  promotedTo     Deployment[]   @relation("PromotionChain")
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
   @@index([status])
   @@index([createdAt])
   @@index([projectId])
+  @@index([environmentId])
 }
