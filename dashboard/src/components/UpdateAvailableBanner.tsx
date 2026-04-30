@@ -102,8 +102,8 @@ export function UpdateAvailableBanner() {
   return (
     <div className="border-b border-amber-500/25 bg-amber-500/10 px-4 py-3 md:px-6">
       <Alert className="border-amber-500/35 bg-amber-500/5">
-        <AlertTitle className="text-amber-950 dark:text-amber-100">Update available</AlertTitle>
-        <AlertDescription className="flex flex-col gap-3 text-amber-950/85 dark:text-amber-100/90">
+        <AlertTitle className="text-amber-950">Update available</AlertTitle>
+        <AlertDescription className="flex flex-col gap-3 text-amber-950/90">
           <p>
             This server&apos;s clone is behind <span className="font-medium text-foreground">origin/{branch}</span>
             {remoteTip ? (

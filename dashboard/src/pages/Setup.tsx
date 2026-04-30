@@ -75,15 +75,22 @@ export function Setup() {
 
   if (loading && !status) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-background text-muted-foreground">
+      <div className="flex min-h-svh items-center justify-center bg-muted/40 text-muted-foreground">
         Loading setup…
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,oklch(0.35_0.12_195/0.25),transparent)]" />
+    <div className="relative min-h-svh overflow-hidden bg-muted/40">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        style={{
+          backgroundImage: `radial-gradient(oklch(0.55 0.15 255 / 0.12) 1px, transparent 1px)`,
+          backgroundSize: "20px 20px",
+        }}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,oklch(0.55_0.15_255/0.12),transparent)]" />
       <div className="relative mx-auto flex min-h-svh max-w-lg flex-col justify-center px-4 py-12">
         <div className="mb-8 space-y-2 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">VersionGate</p>
@@ -94,10 +101,10 @@ export function Setup() {
         </div>
 
         {status?.needsRestart && (
-          <Card className="mb-6 border-amber-500/30 bg-amber-500/5">
+          <Card className="mb-6 border-amber-500/40 bg-amber-50">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base text-amber-200">Restart required</CardTitle>
-              <CardDescription className="text-amber-200/80">
+              <CardTitle className="text-base text-amber-950">Restart required</CardTitle>
+              <CardDescription className="text-amber-900/90">
                 <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground">DATABASE_URL</code> is in{" "}
                 <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground">.env</code> but this API process
                 has not loaded it yet (unusual). Restart the API; restart the worker too so deploy jobs use the
@@ -110,7 +117,7 @@ export function Setup() {
           </Card>
         )}
 
-        <Card className="border-border/50 bg-card/80 shadow-xl ring-1 ring-border/40 backdrop-blur-sm">
+        <Card className="border-border/80 bg-card shadow-lg">
           <CardHeader>
             <CardTitle>Database and domain</CardTitle>
             <CardDescription>
@@ -194,7 +201,7 @@ export function Setup() {
           </CardContent>
         </Card>
       </div>
-      <Toaster position="top-center" richColors theme="dark" />
+      <Toaster position="top-center" richColors theme="light" />
     </div>
   );
 }

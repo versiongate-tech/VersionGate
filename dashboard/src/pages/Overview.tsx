@@ -36,6 +36,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BookOpen, Shield, Terminal } from "lucide-react";
+import { AggregateJobLogStream } from "@/components/AggregateJobLogStream";
 
 function timeAgo(date: string): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -46,6 +48,12 @@ function timeAgo(date: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function regionLabel(p: Project): string {
+  const r = p.env?.AWS_REGION ?? p.env?.REGION ?? p.env?.FLY_REGION;
+  if (typeof r === "string" && r.trim()) return r.trim();
+  return typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "local";
 }
 
 export function Overview() {
@@ -195,24 +203,76 @@ export function Overview() {
         </div>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-primary/25 bg-primary text-primary-foreground shadow-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-primary-foreground">
+              <BookOpen className="size-4" />
+              Runbooks & docs
+            </CardTitle>
+            <CardDescription className="text-primary-foreground/85">
+              Setup, API reference, and host prerequisites for VersionGate.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <a
+              href="https://github.com/dinexh/VersionGate/blob/main/docs/SETUP.md"
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "secondary", className: "w-full bg-white text-primary hover:bg-white/90" })}
+            >
+              Open documentation
+            </a>
+          </CardContent>
+        </Card>
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Terminal className="size-4 text-muted-foreground" />
+              CLI & host
+            </CardTitle>
+            <CardDescription>Preflight, PM2, Docker, and logs still live on the server shell.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link to="/system" className={buttonVariants({ variant: "outline", className: "w-full" })}>
+              System health
+            </Link>
+          </CardContent>
+        </Card>
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Shield className="size-4 text-muted-foreground" />
+              Activity & audit
+            </CardTitle>
+            <CardDescription>Trace deploy and rollback jobs across every project.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link to="/activity" className={buttonVariants({ variant: "outline", className: "w-full" })}>
+              Global activity
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Projects" value={stats.total} hint="Registered in this instance" />
         <StatCard
           label="Live"
           value={stats.running}
-          valueClassName="text-emerald-400"
+          valueClassName="text-emerald-700"
           hint="ACTIVE deployment"
         />
         <StatCard
           label="Failed"
           value={stats.failed}
-          valueClassName="text-red-400"
+          valueClassName="text-red-700"
           hint="Last deploy state"
         />
         <StatCard
           label="Deploying"
           value={stats.deploying}
-          valueClassName="text-cyan-400"
+          valueClassName="text-sky-700"
           hint="Build or rollout in progress"
         />
       </div>
@@ -307,7 +367,10 @@ export function Overview() {
                           <CardTitle className="truncate text-base font-semibold transition-colors group-hover:text-primary">
                             {p.name}
                           </CardTitle>
-                          <CardDescription className="mt-1 truncate font-mono text-xs">Branch: {p.branch}</CardDescription>
+                          <CardDescription className="mt-1 space-y-0.5 font-mono text-xs">
+                            <div className="truncate">Branch: {p.branch}</div>
+                            <div className="truncate text-muted-foreground">Region: {regionLabel(p)}</div>
+                          </CardDescription>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <StatusBadge status={st} />
@@ -337,6 +400,14 @@ export function Overview() {
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3 pb-3">
+                      {st === "DEPLOYING" ? (
+                        <div className="relative z-20 space-y-1">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-sky-700">Deploy in progress</p>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                            <div className="h-full w-2/5 animate-pulse rounded-full bg-sky-500" />
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="text-xs text-muted-foreground">
                         <span className="font-mono">{p.repoUrl.replace(/^https?:\/\/(www\.)?/, "")}</span>
                       </div>
@@ -516,6 +587,11 @@ export function Overview() {
               </CardContent>
             </Card>
           )}
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-medium text-muted-foreground">Recent system logs</h2>
+            <AggregateJobLogStream title="Live deployment tail" pollMs={7000} />
+          </section>
         </div>
       )}
 

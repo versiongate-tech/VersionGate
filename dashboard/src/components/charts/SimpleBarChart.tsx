@@ -7,7 +7,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { CHART } from "./chart-palette";
+import { CHART, CHART_TOOLTIP_STYLE } from "./chart-palette";
 
 export type BarDatum = { name: string; value: number };
 
@@ -29,15 +29,8 @@ export function SimpleBarChart({ data, title }: { data: BarDatum[]; title?: stri
             <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" />
             <XAxis dataKey="name" tick={{ fill: CHART.axis, fontSize: 10 }} tickLine={false} />
             <YAxis allowDecimals={false} tick={{ fill: CHART.axis, fontSize: 10 }} tickLine={false} width={32} />
-            <Tooltip
-              contentStyle={{
-                background: "oklch(0.1 0 0)",
-                border: "1px solid oklch(1 0 0 / 0.12)",
-                borderRadius: "8px",
-                fontSize: "12px",
-              }}
-            />
-            <Bar dataKey="value" name="Count" fill="oklch(0.92 0 0)" radius={[4, 4, 0, 0]} />
+            <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE }} />
+            <Bar dataKey="value" name="Count" fill="oklch(0.48 0.2 255)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

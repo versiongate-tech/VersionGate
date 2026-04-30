@@ -19,6 +19,8 @@ const EMPTY_STATS = {
   disk_total: 0,
   network_sent: 0,
   network_recv: 0,
+  network_sent_rate: 0,
+  network_recv_rate: 0,
   uptime: 0,
   load_avg: [0, 0, 0],
   process_count: 0,

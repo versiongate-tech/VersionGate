@@ -26,6 +26,14 @@ import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { BlueGreenTrafficCard } from "@/components/BlueGreenTrafficCard";
 import { getDeployingDeployment, publicServiceUrl } from "@/lib/deployment-display";
+import { AggregateJobLogStream } from "@/components/AggregateJobLogStream";
+import { jobArtifactLabel, jobDurationLabel } from "@/lib/job-display";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function copyText(text: string, label: string) {
   void navigator.clipboard.writeText(text).then(
@@ -227,9 +235,17 @@ export function ProjectDetail() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+              {prodEnvId ? (
+                <Badge className="bg-primary/10 font-medium text-primary hover:bg-primary/15">
+                  {environmentNameById.get(prodEnvId) ?? "Production"}
+                </Badge>
+              ) : null}
               <StatusBadge status={displayStatus} />
             </div>
             <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+              <p className="max-w-2xl text-sm leading-relaxed">
+                Git-backed service on this host. Blue/green slots map to two fixed ports; Nginx (if configured) routes public traffic to the live slot.
+              </p>
               <a
                 href={project.repoUrl}
                 target="_blank"
@@ -324,7 +340,7 @@ export function ProjectDetail() {
             </div>
           ) : null}
           {!environmentsError && environments.length === 1 && environments[0]?.name === "production" ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400/95">
+            <p className="text-xs text-amber-800">
               Only <strong className="font-medium">production</strong> is present. The dev → staging → production chain appears when all three
               environment rows exist.
             </p>
@@ -413,43 +429,68 @@ export function ProjectDetail() {
 
       <Card className="border-border/50 bg-card/50 ring-1 ring-border/30">
         <CardHeader>
-          <CardTitle>Jobs</CardTitle>
-          <CardDescription>Deploy and rollback runs. Open a row for streamed logs.</CardDescription>
+          <CardTitle>Deployment jobs</CardTitle>
+          <CardDescription>Build and rollback runs with artifact hints and duration.</CardDescription>
         </CardHeader>
         <CardContent className="px-0">
           <Table>
             <TableHeader>
               <TableRow className="border-border/50 hover:bg-transparent">
-                <TableHead className="pl-6">Type</TableHead>
+                <TableHead className="pl-6">Job</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Environment</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead className="pr-6 text-right">Logs</TableHead>
+                <TableHead>Artifact</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead className="pr-6 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {jobs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     No jobs yet. Deploy to generate logs.
                   </TableCell>
                 </TableRow>
               ) : (
-                jobs.map((job) => (
-                  <TableRow key={job.id} className="border-border/40">
-                    <TableCell className="pl-6 font-mono text-sm">{job.type}</TableCell>
-                    <TableCell>
-                      <Badge variant={job.status === "FAILED" ? "destructive" : "secondary"} className="font-mono text-xs">
-                        {job.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{job.startedAt ? timeAgo(job.startedAt) : "—"}</TableCell>
-                    <TableCell className="pr-6 text-right">
-                      <Link to={`/projects/${project.id}/deploy/${job.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                        View log
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))
+                jobs.map((job) => {
+                  const dep = job.deploymentId ? deployments.find((d) => d.id === job.deploymentId) : undefined;
+                  const envName =
+                    dep?.environmentId != null ? environmentNameById.get(dep.environmentId) ?? "—" : "—";
+                  return (
+                    <TableRow key={job.id} className="border-border/40">
+                      <TableCell className="pl-6 font-mono text-xs">#{job.id.slice(0, 8)}</TableCell>
+                      <TableCell className="font-mono text-sm">{job.type}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{envName}</TableCell>
+                      <TableCell>
+                        <Badge variant={job.status === "FAILED" ? "destructive" : "secondary"} className="font-mono text-xs">
+                          {job.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{jobArtifactLabel(job)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{jobDurationLabel(job)}</TableCell>
+                      <TableCell className="pr-6 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            className={buttonVariants({ variant: "outline", size: "sm", className: "h-8 px-2" })}
+                          >
+                            ⋯
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => navigate(`/projects/${project.id}/deploy/${job.id}`)}>
+                              View log
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => void copyText(job.id, "Job id")}
+                            >
+                              Copy job id
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -496,7 +537,7 @@ export function ProjectDetail() {
                         <div className="flex flex-col gap-1">
                           <StatusBadge status={d.status} />
                           {d.errorMessage ? (
-                            <span className="max-w-[200px] truncate text-xs text-red-400" title={d.errorMessage ?? ""}>
+                            <span className="max-w-[200px] truncate text-xs text-red-700" title={d.errorMessage ?? ""}>
                               {d.errorMessage}
                             </span>
                           ) : null}
@@ -521,6 +562,11 @@ export function ProjectDetail() {
           </Table>
         </CardContent>
       </Card>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium text-muted-foreground">Live deployment logs</h2>
+        <AggregateJobLogStream title="Recent jobs on this instance" pollMs={8000} />
+      </section>
 
       <Separator className="opacity-40" />
 

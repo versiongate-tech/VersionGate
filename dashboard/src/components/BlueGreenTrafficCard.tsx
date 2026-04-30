@@ -26,9 +26,9 @@ function slotPhase(
 function phaseBadge(phase: SlotPhase): { label: string; className: string } {
   switch (phase) {
     case "live":
-      return { label: "Receiving traffic", className: "border-emerald-500/40 bg-emerald-600/15 text-emerald-200" };
+      return { label: "Receiving traffic", className: "border-emerald-500/40 bg-emerald-600/12 text-emerald-900" };
     case "deploying":
-      return { label: "Deploy in progress", className: "border-amber-500/40 bg-amber-500/15 text-amber-200" };
+      return { label: "Deploy in progress", className: "border-amber-500/40 bg-amber-500/12 text-amber-900" };
     default:
       return { label: "Idle slot", className: "border-border/60 bg-muted/25 text-muted-foreground" };
   }
@@ -93,14 +93,14 @@ export function BlueGreenTrafficCard({
             <span className="text-muted-foreground" aria-hidden>
               →
             </span>
-            <span className="rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-1 font-mono text-xs text-violet-200">
+            <span className="rounded-md border border-violet-500/35 bg-violet-500/10 px-2 py-1 font-mono text-xs text-violet-900">
               Nginx
             </span>
             <span className="text-muted-foreground" aria-hidden>
               →
             </span>
             {liveHostPort != null && liveUrl ? (
-              <span className="rounded-md border border-emerald-500/35 bg-emerald-500/10 px-2 py-1 font-mono text-xs text-emerald-100">
+              <span className="rounded-md border border-emerald-500/35 bg-emerald-500/10 px-2 py-1 font-mono text-xs text-emerald-900">
                 :{liveHostPort} ({active?.color ?? "—"})
               </span>
             ) : (

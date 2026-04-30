@@ -9,7 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import type { MetricPoint } from "@/hooks/use-server-metric-history";
-import { CHART } from "./chart-palette";
+import { CHART, CHART_TOOLTIP_STYLE } from "./chart-palette";
 
 export function ServerResourceLineChart({ data }: { data: MetricPoint[] }) {
   if (data.length === 0) {
@@ -33,14 +33,7 @@ export function ServerResourceLineChart({ data }: { data: MetricPoint[] }) {
             width={36}
             label={{ value: "%", position: "insideTopLeft", fill: CHART.axis, fontSize: 10 }}
           />
-          <Tooltip
-            contentStyle={{
-              background: "oklch(0.1 0 0)",
-              border: "1px solid oklch(1 0 0 / 0.12)",
-              borderRadius: "8px",
-              fontSize: "12px",
-            }}
-          />
+          <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE }} />
           <Legend wrapperStyle={{ fontSize: "12px" }} />
           <Line type="monotone" dataKey="cpu" name="CPU" stroke={CHART.linePrimary} strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="mem" name="Memory" stroke={CHART.lineSecondary} strokeWidth={2} dot={false} />
@@ -67,14 +60,7 @@ export function ServerNetworkLineChart({ data }: { data: MetricPoint[] }) {
           <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" />
           <XAxis dataKey="time" tick={{ fill: CHART.axis, fontSize: 10 }} tickLine={false} />
           <YAxis tick={{ fill: CHART.axis, fontSize: 10 }} tickLine={false} width={44} />
-          <Tooltip
-            contentStyle={{
-              background: "oklch(0.1 0 0)",
-              border: "1px solid oklch(1 0 0 / 0.12)",
-              borderRadius: "8px",
-              fontSize: "12px",
-            }}
-          />
+          <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE }} />
           <Legend wrapperStyle={{ fontSize: "12px" }} />
           <Line type="monotone" dataKey="netUp" name="Δ sent / interval" stroke={CHART.netUp} strokeWidth={2} dot={false} />
           <Line

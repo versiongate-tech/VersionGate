@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { Info } from "lucide-react";
 import { createProject } from "@/lib/api";
 import {
   Dialog,
@@ -91,22 +92,32 @@ export function CreateProjectModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New project</DialogTitle>
+          <DialogTitle>Create new project</DialogTitle>
           <DialogDescription>
-            Point at your Git repo, then choose the directory that contains your app (like Vercel &quot;Root
-            Directory&quot;). Blue/green host ports are assigned automatically.
+            Point at your Git repository and the app directory (similar to a &quot;root directory&quot; in other
+            platforms). Host ports for blue and green are assigned automatically.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void onSubmit(e)} className="grid gap-4">
+          <div
+            className="flex gap-3 rounded-lg border border-sky-200/90 bg-sky-50/90 p-3 text-sm leading-relaxed text-sky-950"
+            role="note"
+          >
+            <Info className="mt-0.5 size-4 shrink-0 text-sky-600" aria-hidden />
+            <p>
+              Each project gets two fixed host ports. New deploys build into the idle slot; after health checks pass,
+              traffic can switch with no downtime.
+            </p>
+          </div>
           <div className="grid gap-1.5">
             <label htmlFor="cp-name" className="text-sm font-medium">
-              Project name
+              Project name (slug)
             </label>
             <Input
               id="cp-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="my-app"
+              placeholder="e.g. core-api-service"
               autoComplete="off"
               required
             />
@@ -127,18 +138,16 @@ export function CreateProjectModal({
           </div>
           <div className="grid gap-1.5">
             <label htmlFor="cp-branch" className="text-sm font-medium">
-              Production branch
+              Default branch
             </label>
             <Input id="cp-branch" value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" />
           </div>
 
           <div className="grid gap-2">
             <label htmlFor="cp-ctx" className="text-sm font-medium">
-              Root directory
+              Build context path
             </label>
-            <p className="text-xs text-muted-foreground">
-              Path from repo root to the folder Docker should build (where your Dockerfile or app lives).
-            </p>
+            <p className="text-xs text-muted-foreground">Subdirectory containing the Dockerfile or build manifest.</p>
             <div className="flex flex-wrap gap-2">
               {ROOT_PRESETS.map((p) => (
                 <Button
@@ -165,7 +174,7 @@ export function CreateProjectModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <label htmlFor="cp-port" className="text-sm font-medium">
-                Container app port
+                Application port
               </label>
               <Input
                 id="cp-port"
@@ -180,7 +189,7 @@ export function CreateProjectModal({
               <label htmlFor="cp-health" className="text-sm font-medium">
                 Health check path
               </label>
-              <Input id="cp-health" value={healthPath} onChange={(e) => setHealthPath(e.target.value)} placeholder="/health" />
+              <Input id="cp-health" value={healthPath} onChange={(e) => setHealthPath(e.target.value)} placeholder="/healthz" />
             </div>
           </div>
           <DialogFooter className="gap-2 pt-2 sm:justify-end">
@@ -188,7 +197,7 @@ export function CreateProjectModal({
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Creating…" : "Create project"}
+              {submitting ? "Creating…" : "Initialize project"}
             </Button>
           </DialogFooter>
         </form>

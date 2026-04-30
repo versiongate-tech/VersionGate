@@ -153,6 +153,9 @@ export interface ServerStats {
   disk_total: number;
   network_sent: number;
   network_recv: number;
+  /** Bytes per second since last collector sample (when available). */
+  network_sent_rate?: number;
+  network_recv_rate?: number;
   uptime: number;
   load_avg: [number, number, number];
   process_count: number;
@@ -263,6 +266,10 @@ export interface SystemDashboardResponse {
   listening_ports: { address: string; port: number }[];
   top_processes: { pid: number; name: string; cpu_percent: number; memory_percent: number }[];
   alerts: DashboardAlert[];
+}
+
+export function cancelJob(jobId: string): Promise<{ cancelled: boolean }> {
+  return request("DELETE", `/jobs/${jobId}`);
 }
 
 export function getServerDashboard(): Promise<SystemDashboardResponse> {

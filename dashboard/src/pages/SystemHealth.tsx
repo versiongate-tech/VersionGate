@@ -18,9 +18,19 @@ import { ServerNetworkLineChart, ServerResourceLineChart } from "@/components/ch
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AggregateJobLogStream } from "@/components/AggregateJobLogStream";
+import { extractVersionFromPreflightMessage, preflightStatusLabel } from "@/lib/preflight-display";
+import { serviceLabelForPort } from "@/lib/port-labels";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CHART, CHART_TOOLTIP_STYLE } from "@/components/charts/chart-palette";
 
 function fmtBytes(n: number) {
   return n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(2)} MB` : `${Math.round(n)} B`;
+}
+
+function hostnameHint(): string {
+  if (typeof window === "undefined") return "this host";
+  return window.location.hostname || "this host";
 }
 
 export function SystemHealth() {
@@ -87,6 +97,11 @@ export function SystemHealth() {
     return items;
   }, [preflight, dashboard]);
 
+  const cpuBars = useMemo(() => {
+    const slice = history.slice(-18);
+    return slice.map((p, i) => ({ t: String(i + 1), cpu: p.cpu }));
+  }, [history]);
+
   if (!stats) {
     return (
       <div className="w-full space-y-6">
@@ -105,12 +120,15 @@ export function SystemHealth() {
   const memFree = Math.max(0, 100 - stats.memory_percent);
   const ports = dashboard?.listening_ports ?? [];
   const connections = dashboard?.connections ?? [];
+  const processes = dashboard?.top_processes ?? [];
+  const sentRate = stats.network_sent_rate ?? 0;
+  const recvRate = stats.network_recv_rate ?? 0;
 
   return (
     <div className="w-full space-y-8">
       <PageHeader
         title="System health"
-        description="Host compatibility checks, resource usage, listening ports, and alerts for the machine running VersionGate and Docker."
+        description={`Real-time resource allocation and process oversight for VersionGate on ${hostnameHint()} (single-node control plane).`}
         actions={
           <Button type="button" variant="outline" size="sm" disabled={preflightBusy} onClick={() => void loadPreflight()}>
             {preflightBusy ? "Checking…" : "Re-run checks"}
@@ -118,43 +136,138 @@ export function SystemHealth() {
         }
       />
 
+      {/* Top metrics row (mock-aligned) */}
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">CPU usage</CardTitle>
+            <CardDescription>Recent samples (~{Math.max(1, cpuBars.length) * 5}s window)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="text-3xl font-semibold tabular-nums text-primary">{stats.cpu_percent.toFixed(1)}%</div>
+            <div className="h-36 w-full">
+              {cpuBars.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={cpuBars} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" />
+                    <XAxis dataKey="t" hide />
+                    <YAxis domain={[0, 100]} tick={{ fill: CHART.axis, fontSize: 9 }} width={28} />
+                    <Tooltip
+                      contentStyle={{ ...CHART_TOOLTIP_STYLE }}
+                      formatter={(v) => [`${Number(v ?? 0).toFixed(1)}%`, "CPU"]}
+                    />
+                    <Bar dataKey="cpu" fill="oklch(0.48 0.2 255)" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Collecting…</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Memory</CardTitle>
+            <CardDescription>Host RAM from collector</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-lg font-semibold tabular-nums">
+              {fmtBytes(stats.memory_used)} / {fmtBytes(stats.memory_total)}
+            </div>
+            <Progress value={Math.min(100, stats.memory_percent)} className="h-2" />
+            <div className="grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
+              <div>
+                <p className="font-medium text-foreground">Swap</p>
+                <p>—</p>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Cached</p>
+                <p>—</p>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Buffers</p>
+                <p>—</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Extended memory breakdown requires host agent access not exposed in this build.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Disk volume</CardTitle>
+            <CardDescription>Utilization from collector</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              data={[
+                { name: "Used", value: stats.disk_percent },
+                { name: "Free", value: diskFree },
+              ]}
+            />
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Read/write IOPS are not collected — chart shows space headroom only.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Preflight (mock-style columns) */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Server checks</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium text-muted-foreground">Preflight checks</h2>
+          {preflight ? (
+            <Badge variant="outline" className="text-[10px] font-normal">
+              Last run: {new Date(preflight.checkedAt).toLocaleString()}
+            </Badge>
+          ) : null}
+        </div>
         {preflight ? (
-          <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+          <Card className="border-border/80 bg-card shadow-sm">
             <CardHeader className="pb-2">
               <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-base">Preflight</CardTitle>
-                <Badge variant="outline" className={preflight.ok ? "border-emerald-500/40 text-emerald-600" : "border-red-500/40 text-red-600"}>
-                  {preflight.ok ? "Required checks OK" : "Action needed"}
+                <CardTitle className="text-base">Dependencies</CardTitle>
+                <Badge variant="outline" className={preflight.ok ? "border-emerald-500/40 text-emerald-700" : "border-amber-500/50 text-amber-800"}>
+                  {preflight.ok ? "All required checks passed" : "Attention needed"}
                 </Badge>
-                <span className="text-xs text-muted-foreground">{new Date(preflight.checkedAt).toLocaleString()}</span>
               </div>
-              <CardDescription>Bun, Docker, Git, projects directory, and optional PM2 / Nginx.</CardDescription>
+              <CardDescription>Bun, Docker, Git, paths, and optional tooling on this machine.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Check</TableHead>
-                    <TableHead>Severity</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="min-w-[200px]">Detail</TableHead>
+                    <TableHead className="pl-6">Dependency</TableHead>
+                    <TableHead>Version</TableHead>
+                    <TableHead>Environment</TableHead>
+                    <TableHead className="pr-6">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {preflight.checks.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.label}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">{c.severity}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={c.ok ? "border-emerald-500/30" : "border-amber-500/40"}>
-                          {c.ok ? "OK" : "Issue"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="whitespace-normal text-muted-foreground">{c.message}</TableCell>
-                    </TableRow>
-                  ))}
+                  {preflight.checks.map((c) => {
+                    const ver = extractVersionFromPreflightMessage(c.message);
+                    const st = preflightStatusLabel(c);
+                    return (
+                      <TableRow key={c.id}>
+                        <TableCell className="pl-6 font-medium">{c.label}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{ver}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">This node</TableCell>
+                        <TableCell className="pr-6">
+                          <Badge
+                            variant="outline"
+                            className={
+                              c.ok ? "border-sky-500/40 text-sky-800" : "border-amber-500/50 text-amber-900"
+                            }
+                          >
+                            {st}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -166,6 +279,137 @@ export function SystemHealth() {
           </Alert>
         )}
       </section>
+
+      {/* Listening ports + scan */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground">Listening ports</h2>
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
+            <div>
+              <CardTitle className="text-base">Ports (LISTEN)</CardTitle>
+              <CardDescription>
+                From <code className="text-xs">ss -tln</code> on Linux hosts. Public bindings highlighted.
+              </CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void loadPreflight()}>
+              Scan interfaces
+            </Button>
+          </CardHeader>
+          <CardContent className="px-0">
+            {ports.length === 0 ? (
+              <p className="px-6 pb-6 text-sm text-muted-foreground">No listening sockets reported.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6">Port</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Bind address</TableHead>
+                    <TableHead className="pr-6">Exposure</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ports.map((p, i) => {
+                    const pub =
+                      p.address === "*" ||
+                      p.address === "0.0.0.0" ||
+                      p.address === "[::]" ||
+                      p.address === "::";
+                    return (
+                      <TableRow key={`${p.address}-${p.port}-${i}`}>
+                        <TableCell className="pl-6 font-mono tabular-nums">{p.port}</TableCell>
+                        <TableCell className="text-sm">{serviceLabelForPort(p.port)}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{p.address}</TableCell>
+                        <TableCell className="pr-6">
+                          {pub ? (
+                            <Badge variant="outline" className="border-sky-500/45 text-[10px] text-sky-800">
+                              Exposed
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                              Restricted
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Process manager */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground">Process manager</h2>
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
+            <div>
+              <CardTitle className="text-base">Top processes</CardTitle>
+              <CardDescription>Snapshot from the metrics collector (not a full service tree).</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="px-0">
+            {processes.length === 0 ? (
+              <p className="px-6 pb-6 text-sm text-muted-foreground">No process sample available on this OS.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6">PID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>CPU %</TableHead>
+                    <TableHead className="pr-6">Mem %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {processes.slice(0, 24).map((p) => (
+                    <TableRow key={`${p.pid}-${p.name}`}>
+                      <TableCell className="pl-6 font-mono text-xs tabular-nums">{p.pid}</TableCell>
+                      <TableCell className="max-w-[200px] truncate font-mono text-xs">{p.name}</TableCell>
+                      <TableCell className="tabular-nums">{p.cpu_percent.toFixed(1)}</TableCell>
+                      <TableCell className="pr-6 tabular-nums">{p.memory_percent.toFixed(1)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Aggregate job log stream */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-muted-foreground">Cluster log preview</h2>
+        <AggregateJobLogStream title="Main cluster logs (job tail)" pollMs={6000} />
+        <p className="text-xs text-muted-foreground">
+          Streams are synthesized from recent deploy job logs. Host-level syslog forwarding is not bundled.
+        </p>
+      </section>
+
+      {/* Node / regions decorative card */}
+      <Card className="overflow-hidden border-border/80 bg-gradient-to-br from-sky-50/80 via-card to-card shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Node infrastructure</CardTitle>
+          <CardDescription>
+            VersionGate targets a single-node VPS model. Multi-region orchestration is not active — this card is a
+            layout placeholder aligned with control-plane mocks.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3 text-xs">
+          <Badge variant="outline" className="border-emerald-500/40 text-emerald-800">
+            Primary: local
+          </Badge>
+          <Badge variant="outline" className="border-sky-500/40 text-sky-800">
+            Edge: n/a
+          </Badge>
+          <Badge variant="outline" className="border-amber-500/40 text-amber-900">
+            DR: configure backups
+          </Badge>
+        </CardContent>
+      </Card>
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">Security and resource alerts</h2>
@@ -199,50 +443,8 @@ export function SystemHealth() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Listening TCP ports</h2>
-        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Ports (LISTEN)</CardTitle>
-            <CardDescription>From <code className="text-xs">ss -tln</code> on the host. Public bindings (0.0.0.0 / ::) are highlighted.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {ports.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No listening sockets reported (or collector unavailable on this OS).</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Port</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ports.map((p, i) => {
-                    const pub = p.address === "*" || p.address === "0.0.0.0" || p.address === "[::]" || p.address === "::";
-                    return (
-                      <TableRow key={`${p.address}-${p.port}-${i}`}>
-                        <TableCell className="font-mono text-xs">{p.address}</TableCell>
-                        <TableCell>
-                          <span className="font-mono tabular-nums">{p.port}</span>
-                          {pub ? (
-                            <Badge variant="outline" className="ml-2 border-cyan-500/40 text-[10px] text-cyan-700 dark:text-cyan-400">
-                              exposed
-                            </Badge>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">Established connections</h2>
-        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+        <Card className="border-border/80 bg-card shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">TCP established</CardTitle>
             <CardDescription>Sample of active connections (newest collector snapshot).</CardDescription>
@@ -280,78 +482,19 @@ export function SystemHealth() {
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">Server metrics</h2>
         <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="border-border/50 bg-card/60 ring-1 ring-border/30 lg:col-span-2">
+          <Card className="border-border/80 bg-card shadow-sm lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base">Resource usage over time</CardTitle>
-              <CardDescription>CPU, memory, and disk utilization (percent).</CardDescription>
+              <CardDescription>CPU, memory, and disk utilization (%).</CardDescription>
             </CardHeader>
             <CardContent>
               <ServerResourceLineChart data={history} />
             </CardContent>
           </Card>
-          <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
+          <Card className="border-border/80 bg-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-base">Disk headroom</CardTitle>
-              <CardDescription>Used vs free (derived from disk percent).</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DonutChart
-                data={[
-                  { name: "Used", value: stats.disk_percent },
-                  { name: "Free", value: diskFree },
-                ]}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-          <CardHeader>
-            <CardTitle className="text-base">Network throughput (delta per interval)</CardTitle>
-            <CardDescription>Bytes sent and received since the previous sample.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ServerNetworkLineChart data={history} />
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-            <CardHeader className="space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">CPU</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="text-3xl font-semibold tabular-nums">{stats.cpu_percent.toFixed(1)}%</div>
-              <Progress value={Math.min(100, stats.cpu_percent)} className="h-2" />
-            </CardContent>
-          </Card>
-          <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-            <CardHeader className="space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Memory</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="text-3xl font-semibold tabular-nums">{stats.memory_percent.toFixed(1)}%</div>
-              <p className="text-xs text-muted-foreground">
-                {fmtBytes(stats.memory_used)} / {fmtBytes(stats.memory_total)}
-              </p>
-              <Progress value={Math.min(100, stats.memory_percent)} className="h-2" />
-            </CardContent>
-          </Card>
-          <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-            <CardHeader className="space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Disk</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="text-3xl font-semibold tabular-nums">{stats.disk_percent.toFixed(1)}%</div>
-              <p className="text-xs text-muted-foreground">
-                {fmtBytes(stats.disk_used)} / {fmtBytes(stats.disk_total)}
-              </p>
-              <Progress value={Math.min(100, stats.disk_percent)} className="h-2" />
-            </CardContent>
-          </Card>
-          <Card className="border-border/50 bg-card/60 ring-1 ring-border/30">
-            <CardHeader className="space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Memory headroom</CardTitle>
+              <CardTitle className="text-base">Memory headroom</CardTitle>
+              <CardDescription>Used vs free (percent).</CardDescription>
             </CardHeader>
             <CardContent>
               <DonutChart
@@ -364,8 +507,67 @@ export function SystemHealth() {
           </Card>
         </div>
 
+        <Card className="border-border/80 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base">Network throughput (delta per interval)</CardTitle>
+            <CardDescription>Bytes sent and received since the previous sample.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ServerNetworkLineChart data={history} />
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-border/80 bg-card shadow-sm">
+            <CardHeader className="space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">CPU</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="text-3xl font-semibold tabular-nums">{stats.cpu_percent.toFixed(1)}%</div>
+              <Progress value={Math.min(100, stats.cpu_percent)} className="h-2" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/80 bg-card shadow-sm">
+            <CardHeader className="space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Memory</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="text-3xl font-semibold tabular-nums">{stats.memory_percent.toFixed(1)}%</div>
+              <p className="text-xs text-muted-foreground">
+                {fmtBytes(stats.memory_used)} / {fmtBytes(stats.memory_total)}
+              </p>
+              <Progress value={Math.min(100, stats.memory_percent)} className="h-2" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/80 bg-card shadow-sm">
+            <CardHeader className="space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Disk</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="text-3xl font-semibold tabular-nums">{stats.disk_percent.toFixed(1)}%</div>
+              <p className="text-xs text-muted-foreground">
+                {fmtBytes(stats.disk_used)} / {fmtBytes(stats.disk_total)}
+              </p>
+              <Progress value={Math.min(100, stats.disk_percent)} className="h-2" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/80 bg-card shadow-sm">
+            <CardHeader className="space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Network Δ</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 text-xs text-muted-foreground">
+              <div>
+                ↑ <span className="font-mono text-foreground">{fmtBytes(sentRate)}/s</span>
+              </div>
+              <div>
+                ↓ <span className="font-mono text-foreground">{fmtBytes(recvRate)}/s</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+          <Card className="border-border/80 bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">Network totals</CardTitle>
               <CardDescription>Cumulative since boot (collector).</CardDescription>
@@ -379,7 +581,7 @@ export function SystemHealth() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-border/50 bg-card/50 ring-1 ring-border/25">
+          <Card className="border-border/80 bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-base">System</CardTitle>
               <CardDescription>Load averages and process count.</CardDescription>

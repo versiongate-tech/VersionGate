@@ -6,7 +6,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { PIE_COLORS } from "./chart-palette";
+import { CHART_TOOLTIP_STYLE, PIE_COLORS } from "./chart-palette";
 
 export type DonutDatum = { name: string; value: number };
 
@@ -48,14 +48,7 @@ export function DonutChart({
                 <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="transparent" />
               ))}
             </Pie>
-            <Tooltip
-              contentStyle={{
-                background: "oklch(0.12 0 0)",
-                border: "1px solid oklch(1 0 0 / 0.12)",
-                borderRadius: "8px",
-                fontSize: "12px",
-              }}
-            />
+            <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE }} />
             <Legend wrapperStyle={{ fontSize: "12px" }} />
           </PieChart>
         </ResponsiveContainer>

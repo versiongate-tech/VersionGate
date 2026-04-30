@@ -42,7 +42,7 @@ function boolBadge(ok: boolean, yes = "Yes", no = "No") {
 const textareaClass = cn(
   "min-h-[72px] w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm text-foreground shadow-none outline-none",
   "placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-  "disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+  "disabled:cursor-not-allowed disabled:opacity-50"
 );
 
 export function Settings() {
@@ -248,14 +248,14 @@ export function Settings() {
   return (
     <div className="w-full max-w-4xl space-y-10">
       <PageHeader
-        title="Settings"
-        description="Instance diagnostics, optional updates to the server .env file, and how secrets are handled. Secret values are never read back from the API. Sign in is required once an admin account exists."
+        title="System settings"
+        description="Manage instance configuration, self-update, and environment variables. Secret values are never read back from the API."
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-border/50 bg-card/60 ring-1 ring-border/30 lg:col-span-2">
+        <Card className="border-border/80 bg-card shadow-sm lg:col-span-2">
           <CardHeader>
-            <CardTitle>Basic information</CardTitle>
+            <CardTitle>Instance summary</CardTitle>
             <CardDescription>Engine build, runtime mode, and paths used by the control plane.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -332,7 +332,7 @@ export function Settings() {
                     ) : null}
                   </p>
                   {selfUpdate.git.message ? (
-                    <p className="mt-1 text-amber-600 dark:text-amber-400">{selfUpdate.git.message}</p>
+                    <p className="mt-1 text-amber-800">{selfUpdate.git.message}</p>
                   ) : selfUpdate.git.behind ? (
                     <p className="mt-1 text-foreground">Remote is ahead — you can update.</p>
                   ) : selfUpdate.git.isGitRepo ? (
@@ -407,7 +407,7 @@ export function Settings() {
                       id="su-auto"
                       value={suOpts.autoApply}
                       onChange={(e) => setSuOpts((o) => ({ ...o, autoApply: e.target.value }))}
-                      className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                      className="h-8 w-full rounded-lg border border-input bg-muted/40 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
                       <option value="false">false</option>
                       <option value="true">true</option>
@@ -606,7 +606,7 @@ export function Settings() {
                   id="env-prisma"
                   value={envDraft.PRISMA_SCHEMA_SYNC ?? ""}
                   onChange={(e) => setEnvField("PRISMA_SCHEMA_SYNC", e.target.value)}
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  className="h-8 w-full rounded-lg border border-input bg-muted/40 px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                   <option value="">Leave unchanged</option>
                   <option value="migrate">migrate</option>
@@ -666,13 +666,37 @@ export function Settings() {
             </div>
             <div className="flex flex-wrap gap-2 pt-2">
               <Button type="submit" disabled={envSaving}>
-                {envSaving ? "Saving…" : "Save to .env"}
+                {envSaving ? "Saving…" : "Save configuration"}
               </Button>
               <Button type="button" variant="secondary" disabled={envSaving} onClick={() => setEnvDraft({})}>
-                Clear fields
+                Discard changes
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/40 bg-destructive/5 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-destructive">Danger zone</CardTitle>
+          <CardDescription>
+            VersionGate does not expose a remote &quot;destroy instance&quot; API. Removing the engine requires SSH access to stop
+            PM2, remove files, and optionally drop the database.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() =>
+              toast.info("Host uninstall is manual", {
+                description:
+                  "Stop versiongate-api / versiongate-worker, delete the install directory, and clean Docker resources on the server.",
+              })
+            }
+          >
+            Uninstall guidance
+          </Button>
         </CardContent>
       </Card>
     </div>

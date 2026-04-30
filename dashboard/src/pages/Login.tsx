@@ -64,9 +64,9 @@ export function Login() {
 
   if (loading) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-background text-muted-foreground">
+      <div className="flex min-h-svh items-center justify-center bg-muted/40 text-muted-foreground">
         Loading…
-        <Toaster position="top-center" richColors theme="dark" />
+        <Toaster position="top-center" richColors theme="light" />
       </div>
     );
   }
@@ -77,8 +77,15 @@ export function Login() {
     : "Sign in to manage projects and deployments.";
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,oklch(0.35_0.12_195/0.25),transparent)]" />
+    <div className="relative min-h-svh overflow-hidden bg-muted/40">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        style={{
+          backgroundImage: `radial-gradient(oklch(0.55 0.15 255 / 0.12) 1px, transparent 1px)`,
+          backgroundSize: "20px 20px",
+        }}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,oklch(0.55_0.15_255/0.12),transparent)]" />
       <div className="relative mx-auto flex min-h-svh max-w-lg flex-col justify-center px-4 py-12">
         <div className="mb-8 space-y-2 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">VersionGate</p>
@@ -86,7 +93,7 @@ export function Login() {
           <p className="text-sm text-muted-foreground">{subtitle}</p>
         </div>
 
-        <Card className="border-border/50 bg-card/80 shadow-xl ring-1 ring-border/40 backdrop-blur-sm">
+        <Card className="border-border/80 bg-card shadow-lg">
           <CardHeader>
             <CardTitle>{bootstrapPending ? "Bootstrap (one-time)" : "Credentials"}</CardTitle>
             <CardDescription>
@@ -135,8 +142,36 @@ export function Login() {
             </form>
           </CardContent>
         </Card>
+
+        <div className="mt-6 flex justify-center">
+          <div className="rounded-full border border-border/80 bg-card/90 px-4 py-2 text-xs text-muted-foreground shadow-sm">
+            Dashboard{" "}
+            <span className="font-mono text-foreground">{typeof __DASHBOARD_VERSION__ !== "undefined" ? __DASHBOARD_VERSION__ : "dev"}</span>
+            <span className="mx-2 text-border">|</span>
+            Status: <span className="font-medium text-emerald-700">Operational</span>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-sky-200/80 bg-sky-50/90 px-4 py-3 text-center text-xs text-sky-950">
+          <p className="font-semibold uppercase tracking-wide text-sky-900">New installation?</p>
+          <p className="mt-1 text-sky-900/90">
+            Use the setup wizard on the host if PostgreSQL is not configured yet, then return here to sign in.
+          </p>
+        </div>
+
+        <footer className="mt-10 flex flex-wrap justify-center gap-x-6 gap-y-2 border-t border-border/60 pt-6 text-xs text-muted-foreground">
+          <a className="hover:text-foreground" href="https://github.com/dinexh/VersionGate/blob/main/docs/SETUP.md" target="_blank" rel="noreferrer">
+            Documentation
+          </a>
+          <a className="hover:text-foreground" href="https://github.com/dinexh/VersionGate/issues" target="_blank" rel="noreferrer">
+            Security
+          </a>
+          <a className="hover:text-foreground" href="https://github.com/dinexh/VersionGate" target="_blank" rel="noreferrer">
+            API & source
+          </a>
+        </footer>
       </div>
-      <Toaster position="top-center" richColors theme="dark" />
+      <Toaster position="top-center" richColors theme="light" />
     </div>
   );
 }
