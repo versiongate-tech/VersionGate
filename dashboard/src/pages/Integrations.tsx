@@ -16,6 +16,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const MANAGE_APP_HREF = "https://github.com/apps/VersionGate-App/installations";
 const INSTALL_HREF = "/api/auth/github/install";
@@ -81,6 +82,11 @@ export function Integrations() {
     return g ? g.trim().toLowerCase() : null;
   }, [searchParams]);
 
+  const githubCallbackUrl = useMemo(
+    () => (typeof window !== "undefined" ? `${window.location.origin}/api/auth/github/callback` : ""),
+    []
+  );
+
   useEffect(() => {
     if (!githubQuery) return;
     const messages: Record<string, { type: "success" | "error"; text: string }> = {
@@ -109,6 +115,28 @@ export function Integrations() {
         title="Integrations"
         description="Connect external services to streamline project setup and automation."
       />
+
+      <Alert className="border-border/80 bg-muted/20">
+        <AlertTitle>Return to VersionGate after GitHub install</AlertTitle>
+        <AlertDescription className="space-y-2 text-muted-foreground [&_p]:text-sm">
+          <p>
+            If you finish install on GitHub but stay on <span className="font-mono text-xs">github.com/settings/installations</span>, your GitHub App{" "}
+            <strong className="text-foreground">Callback URL</strong> is not pointing at this server. In GitHub →{" "}
+            <strong className="text-foreground">Settings → Applications → VersionGate-App</strong> (or the org app settings), set{" "}
+            <strong className="text-foreground">Callback URL</strong> to exactly:
+          </p>
+          {githubCallbackUrl ? (
+            <code className="block max-w-full overflow-x-auto break-all rounded-md bg-background px-2 py-1.5 font-mono text-xs text-foreground">
+              {githubCallbackUrl}
+            </code>
+          ) : null}
+          <p>
+            Optionally set the same value as <strong className="text-foreground">Setup URL</strong> so GitHub sends users back here automatically. Use{" "}
+            <strong className="text-foreground">Connect GitHub</strong> below so your session is linked. If the API is reached on a different host than this page, set{" "}
+            <span className="font-mono text-xs">PUBLIC_APP_URL</span> in <span className="font-mono text-xs">.env</span> and register that callback URL in the GitHub App.
+          </p>
+        </AlertDescription>
+      </Alert>
 
       <Card>
         <CardHeader>

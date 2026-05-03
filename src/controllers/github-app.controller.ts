@@ -14,13 +14,12 @@ import { createInstallState, parseInstallState } from "../utils/github-install-s
 import { getInstallationAccessToken } from "../utils/github-installation-token";
 import { normalizeGithubRepoUrl } from "../utils/github-repo-url";
 import { verifyGithubWebhookSignature } from "../utils/github-webhook-signature";
+import { dashboardIntegrationsAbsoluteUrl } from "../utils/public-app-origin";
 
 const projectRepo = new ProjectRepository();
 const envRepo = new EnvironmentRepository();
 
 const INSTALL_APP_URL = "https://github.com/apps/VersionGate-App/installations/new";
-/** Dashboard Integrations page (SPA). */
-const INTEGRATIONS_PATH = "/dashboard/integrations";
 
 function githubAppReady(): boolean {
   const appId = Number(config.githubAppId);
@@ -56,6 +55,14 @@ export async function githubInstallHandler(req: FastifyRequest, reply: FastifyRe
     url.searchParams.set("state", createInstallState(user.id, secret));
   }
 
+  logger.info(
+    {
+      userId: user.id,
+      redirectAfterInstall: dashboardIntegrationsAbsoluteUrl(req, { github: "connected" }),
+    },
+    "githubInstall: redirecting user to GitHub App install"
+  );
+
   reply.redirect(302, url.toString());
 }
 
@@ -64,15 +71,25 @@ export async function githubCallbackHandler(
   reply: FastifyReply
 ): Promise<void> {
   if (!githubAppReady()) {
-    reply.redirect(302, `${INTEGRATIONS_PATH}?github=config`);
+    reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, { github: "config" }));
     return;
   }
 
   const installationIdStr = req.query.installation_id ?? "";
   const setupAction = req.query.setup_action ?? "";
 
+  logger.info(
+    {
+      installationId: installationIdStr || undefined,
+      setupAction: setupAction || undefined,
+      host: req.headers.host,
+      origin: dashboardIntegrationsAbsoluteUrl(req, {}),
+    },
+    "githubCallback: received redirect from GitHub"
+  );
+
   if (!installationIdStr || !/^\d+$/.test(installationIdStr)) {
-    reply.redirect(302, `${INTEGRATIONS_PATH}?github=missing_installation`);
+    reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, { github: "missing_installation" }));
     return;
   }
 
@@ -84,12 +101,12 @@ export async function githubCallbackHandler(
     userId = user?.id ?? null;
   }
   if (!userId) {
-    reply.redirect(302, `${INTEGRATIONS_PATH}?github=auth_required`);
+    reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, { github: "auth_required" }));
     return;
   }
 
   if (setupAction === "request") {
-    reply.redirect(302, INTEGRATIONS_PATH);
+    reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, {}));
     return;
   }
 
@@ -105,7 +122,7 @@ export async function githubCallbackHandler(
 
   const account = installation.account;
   if (!account || typeof account !== "object") {
-    reply.redirect(302, `${INTEGRATIONS_PATH}?github=bad_installation`);
+    reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, { github: "bad_installation" }));
     return;
   }
   const login = "login" in account ? account.login : "";
@@ -127,7 +144,7 @@ export async function githubCallbackHandler(
     },
   });
 
-  reply.redirect(302, `${INTEGRATIONS_PATH}?github=connected`);
+  reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, { github: "connected" }));
 }
 
 async function resolveInstallationForUser(
