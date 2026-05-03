@@ -160,6 +160,42 @@ async function avatarForInstallation(row: GitHubInstallation, octokit: Octokit):
   }
 }
 
+/** GET /api/github/installation — session; DB only (no GitHub App env required). */
+export async function githubInstallationRecordHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const raw = getSessionTokenFromRequest(req.headers.cookie);
+  const user = await getUserFromSessionToken(raw);
+  if (!user) {
+    reply.code(401).send({ error: "Unauthorized", message: "Sign in required", code: "AUTH_REQUIRED" });
+    return;
+  }
+
+  const rows = await prisma.gitHubInstallation.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (rows.length === 0) {
+    reply.code(200).send({ installation: null, installations: [] });
+    return;
+  }
+
+  const primary = rows[0];
+  reply.code(200).send({
+    installation: {
+      installationId: primary.installationId.toString(),
+      githubAccountLogin: primary.githubAccountLogin,
+      githubAccountType: primary.githubAccountType,
+      createdAt: primary.createdAt.toISOString(),
+    },
+    installations: rows.map((r) => ({
+      installationId: r.installationId.toString(),
+      githubAccountLogin: r.githubAccountLogin,
+      githubAccountType: r.githubAccountType,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  });
+}
+
 /** GET /api/github/status — session; connected GitHub App installs + avatar for primary. */
 export async function githubIntegrationStatusHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!githubAppReady()) {

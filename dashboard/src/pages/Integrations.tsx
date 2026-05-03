@@ -7,7 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ApiError, getGithubIntegrationStatus, type GithubIntegrationStatus } from "@/lib/api";
+import {
+  ApiError,
+  getGithubInstallation,
+  getGithubIntegrationStatus,
+  type GithubInstallationSummary,
+} from "@/lib/api";
 import { Separator } from "@/components/ui/separator";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,37 +22,59 @@ const INSTALL_HREF = "/api/auth/github/install";
 
 export function Integrations() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<GithubIntegrationStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+
+  /** Until first `/api/github/installation` response — avoid flashing Connect vs Connected. */
+  const [gateReady, setGateReady] = useState(false);
+  const [primaryInstallation, setPrimaryInstallation] = useState<GithubInstallationSummary | null>(null);
+  const [installationsList, setInstallationsList] = useState<GithubInstallationSummary[]>([]);
+  const [gateError, setGateError] = useState<string | null>(null);
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      setLoading(true);
-      setError(null);
+      setGateReady(false);
+      setGateError(null);
       try {
-        const s = await getGithubIntegrationStatus();
-        if (!cancelled) setStatus(s);
+        const r = await getGithubInstallation();
+        if (cancelled) return;
+        setPrimaryInstallation(r.installation);
+        setInstallationsList(r.installations);
       } catch (e) {
         if (!cancelled) {
-          if (e instanceof ApiError && e.status === 503) {
-            setError(
-              "GitHub App is not configured on this server. Set GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY on the engine."
-            );
-          } else {
-            setError(e instanceof ApiError ? e.message : "Failed to load GitHub status");
-          }
-          setStatus(null);
+          setGateError(e instanceof ApiError ? e.message : "Failed to load GitHub installation.");
+          setPrimaryInstallation(null);
+          setInstallationsList([]);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setGateReady(true);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  /** Optional avatar when GitHub App credentials exist on the server (does not affect connected/disconnected). */
+  useEffect(() => {
+    if (!primaryInstallation) {
+      setAvatarUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void getGithubIntegrationStatus()
+      .then((s) => {
+        if (cancelled) return;
+        setAvatarUrl(s.installation?.avatarUrl ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAvatarUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryInstallation?.installationId]);
 
   const githubQuery = useMemo(() => {
     const g = searchParams.get("github");
@@ -74,7 +101,7 @@ export function Integrations() {
     setSearchParams({}, { replace: true });
   }, [githubQuery, setSearchParams]);
 
-  const connected = status?.connected && status.installation;
+  const connected = primaryInstallation !== null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
@@ -98,71 +125,91 @@ export function Integrations() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {loading ? (
-            <div className="flex items-center gap-4">
-              <Skeleton className="size-14 rounded-full" />
-              <div className="grid flex-1 gap-2">
-                <Skeleton className="h-5 w-48" />
-                <Skeleton className="h-4 w-72" />
-              </div>
-            </div>
-          ) : error ? (
-            <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {error}
-              {error.toLowerCase().includes("not configured") ? (
-                <p className="mt-2 text-muted-foreground">
-                  Ask your operator to set <code className="rounded bg-muted px-1 font-mono text-xs">GITHUB_APP_ID</code>{" "}
-                  and <code className="rounded bg-muted px-1 font-mono text-xs">GITHUB_APP_PRIVATE_KEY</code>.
-                </p>
-              ) : null}
-            </div>
-          ) : connected && status.installation ? (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-4">
-                <Avatar size="lg" className="size-14 border border-border">
-                  {status.installation.avatarUrl ? (
-                    <AvatarImage src={status.installation.avatarUrl} alt="" />
-                  ) : null}
-                  <AvatarFallback className="bg-muted text-lg font-semibold">
-                    {status.installation.githubAccountLogin.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-mono text-base font-semibold text-foreground">
-                      {status.installation.githubAccountLogin}
-                    </p>
-                    <Badge className="font-normal">Connected</Badge>
-                    <Badge variant="outline" className="font-normal capitalize">
-                      {status.installation.githubAccountType}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Installation ID <span className="font-mono">{status.installation.installationId}</span>
-                  </p>
-                  {status.installations.length > 1 ? (
-                    <p className="text-xs text-muted-foreground">
-                      + {status.installations.length - 1} other installation
-                      {status.installations.length > 2 ? "s" : ""} linked to your account
-                    </p>
-                  ) : null}
+          {!gateReady ? (
+            <div className="space-y-4" aria-busy="true" aria-label="Loading GitHub integration">
+              <div className="flex items-center gap-4">
+                <Skeleton className="size-14 shrink-0 rounded-full" />
+                <div className="grid min-w-0 flex-1 gap-2">
+                  <Skeleton className="h-5 w-48 max-w-full" />
+                  <Skeleton className="h-4 w-72 max-w-full" />
+                  <Skeleton className="h-4 w-40 max-w-full" />
                 </div>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <a
-                  href={MANAGE_APP_HREF}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex gap-1.5")}
-                >
-                  <ExternalLink className="size-3.5" />
-                  Manage on GitHub
-                </a>
-                <a href={INSTALL_HREF} className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>
-                  Add another org
-                </a>
-              </div>
+              <Skeleton className="h-9 w-full max-w-xs rounded-lg" />
             </div>
+          ) : gateError ? (
+            <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {gateError}
+            </div>
+          ) : connected && primaryInstallation ? (
+            <>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <Avatar size="lg" className="size-14 border border-border">
+                    {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+                    <AvatarFallback className="bg-muted text-lg font-semibold">
+                      {primaryInstallation.githubAccountLogin.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate font-mono text-base font-semibold text-foreground">
+                        {primaryInstallation.githubAccountLogin}
+                      </p>
+                      <Badge className="font-normal">Connected</Badge>
+                      <Badge variant="outline" className="font-normal capitalize">
+                        {primaryInstallation.githubAccountType}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Installation ID <span className="font-mono">{primaryInstallation.installationId}</span>
+                    </p>
+                    {installationsList.length > 1 ? (
+                      <p className="text-xs text-muted-foreground">
+                        + {installationsList.length - 1} other installation
+                        {installationsList.length > 2 ? "s" : ""} linked to your account
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <a
+                    href={MANAGE_APP_HREF}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex gap-1.5")}
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Manage on GitHub
+                  </a>
+                  <a href={INSTALL_HREF} className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>
+                    Add another org
+                  </a>
+                </div>
+              </div>
+              {installationsList.length > 1 ? (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      All installations
+                    </p>
+                    <ul className="grid gap-2 text-sm">
+                      {installationsList.map((i) => (
+                        <li
+                          key={i.installationId}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
+                        >
+                          <span className="font-mono font-medium">{i.githubAccountLogin}</span>
+                          <span className="text-xs capitalize text-muted-foreground">{i.githubAccountType}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{i.installationId}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              ) : null}
+            </>
           ) : (
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
@@ -173,34 +220,14 @@ export function Integrations() {
               </a>
             </div>
           )}
-
-          {!loading && !error && status?.connected && status.installations.length > 1 ? (
-            <>
-              <Separator />
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  All installations
-                </p>
-                <ul className="grid gap-2 text-sm">
-                  {status.installations.map((i) => (
-                    <li
-                      key={i.installationId}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
-                    >
-                      <span className="font-mono font-medium">{i.githubAccountLogin}</span>
-                      <span className="text-xs capitalize text-muted-foreground">{i.githubAccountType}</span>
-                      <span className="font-mono text-xs text-muted-foreground">{i.installationId}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </>
-          ) : null}
         </CardContent>
       </Card>
 
       <p className="text-center text-xs text-muted-foreground">
-        After connecting, use <Link className="text-primary underline-offset-2 hover:underline" to="/projects">New project</Link>{" "}
+        After connecting, use{" "}
+        <Link className="text-primary underline-offset-2 hover:underline" to="/projects">
+          New project
+        </Link>{" "}
         to pick a repository and branch.
       </p>
     </div>

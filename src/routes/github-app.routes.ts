@@ -3,6 +3,7 @@ import { requireDatabaseConfigured } from "../middleware/require-database";
 import {
   githubAppWebhookHandler,
   githubCallbackHandler,
+  githubInstallationRecordHandler,
   githubIntegrationStatusHandler,
   githubInstallHandler,
   githubRepoBranchesHandler,
@@ -13,6 +14,7 @@ export async function githubAppRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireDatabaseConfigured);
   app.get("/auth/github/install", githubInstallHandler);
   app.get("/auth/github/callback", githubCallbackHandler);
+  app.get("/github/installation", githubInstallationRecordHandler);
   app.get("/github/status", githubIntegrationStatusHandler);
   app.get("/github/repos/:owner/:repo/branches", githubRepoBranchesHandler);
   app.get("/github/repos", githubReposHandler);

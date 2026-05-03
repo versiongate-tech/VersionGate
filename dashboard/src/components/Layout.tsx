@@ -67,6 +67,7 @@ export function Layout() {
   const navigate = useNavigate();
   const [serverOk, setServerOk] = useState(true);
   const [setupGate, setSetupGate] = useState<"loading" | "ready">("loading");
+  const [needsRestartBanner, setNeedsRestartBanner] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -77,9 +78,11 @@ export function Layout() {
     void getSetupStatus()
       .then((s) => {
         if (cancelled) return;
-        const incomplete = !s.configured || !s.dbConnected || (s.needsRestart ?? false);
+        const incomplete = !s.configured || !s.dbConnected;
         if (incomplete) {
           navigate("/setup", { replace: true });
+        } else {
+          setNeedsRestartBanner(Boolean(s.needsRestart));
         }
         setSetupGate("ready");
       })
@@ -396,6 +399,20 @@ export function Layout() {
             </div>
 
             <UpdateAvailableBanner />
+            {needsRestartBanner ? (
+              <div
+                className="border-b border-amber-300/80 bg-amber-50 px-4 py-2.5 text-center text-sm text-amber-950"
+                role="status"
+              >
+                <strong className="font-semibold">Restart required:</strong>{" "}
+                <code className="rounded bg-amber-100/80 px-1 font-mono text-xs">DATABASE_URL</code> is in{" "}
+                <code className="rounded bg-amber-100/80 px-1 font-mono text-xs">.env</code> but this API process has not
+                loaded it. Restart the API and worker.&nbsp;
+                <code className="mt-1 inline-block rounded bg-amber-100/80 px-1.5 py-0.5 font-mono text-xs">
+                  pm2 restart versiongate-api versiongate-worker
+                </code>
+              </div>
+            ) : null}
             <div className="flex w-full min-w-0 flex-1 flex-col gap-4 bg-muted/30 px-4 py-4 md:px-6 md:py-6 lg:px-8">
               {setupGate === "loading" ? (
                 <div className="flex flex-1 items-center justify-center text-muted-foreground">Loading…</div>

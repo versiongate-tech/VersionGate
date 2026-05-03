@@ -335,6 +335,12 @@ export interface InstanceSettings {
   needsRestart: boolean;
   encryptionKeyConfigured: boolean;
   geminiConfigured: boolean;
+  /** Public hostname or IPv4 from `.env` (`PUBLIC_DOMAIN`). */
+  publicDomain: string;
+  /** URL path prefix where the app is exposed (`PUBLIC_BASE_PATH`, e.g. `/` or `/versiongate`). */
+  publicBasePath: string;
+  /** Let's Encrypt contact email from `.env` (`CERTBOT_EMAIL`). */
+  certbotEmail: string;
   selfUpdateConfigured: boolean;
   selfUpdateGitBranch: string;
   selfUpdatePollMs: number;
@@ -383,6 +389,23 @@ export function patchInstanceEnv(env: Record<string, string>): Promise<{
   keysWritten: string[];
 }> {
   return request("PATCH", "/settings/env", { env });
+}
+
+export function applyNginxSite(body: {
+  publicDomain?: string;
+  publicBasePath?: string;
+}): Promise<{
+  ok: boolean;
+  message: string;
+  path: string;
+  publicDomain: string;
+  publicBasePath: string;
+}> {
+  return request("POST", "/settings/nginx/apply", body);
+}
+
+export function requestCertbotSsl(body: { email?: string }): Promise<{ ok: boolean; message: string }> {
+  return request("POST", "/settings/ssl/certbot", body);
 }
 
 export function applySetup(body: {
@@ -471,6 +494,15 @@ export interface GithubBranchRow {
 export interface GithubBranchesResponse {
   installationId: string;
   branches: GithubBranchRow[];
+}
+
+export interface GithubInstallationGateResponse {
+  installation: GithubInstallationSummary | null;
+  installations: GithubInstallationSummary[];
+}
+
+export function getGithubInstallation(): Promise<GithubInstallationGateResponse> {
+  return request("GET", "/github/installation", undefined, githubApiBase());
 }
 
 export function getGithubIntegrationStatus(): Promise<GithubIntegrationStatus> {

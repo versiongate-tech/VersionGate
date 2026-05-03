@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  applyNginxSite,
   applySelfUpdateFromSettings,
   checkSelfUpdateFromSettings,
   enableSelfUpdateFromSettings,
@@ -14,6 +15,7 @@ import {
   getSelfUpdateSettings,
   getSetupStatus,
   patchInstanceEnv,
+  requestCertbotSsl,
   type InstanceSettings,
   type SelfUpdateSettingsResponse,
   type SetupStatus,
@@ -21,6 +23,8 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { DonutChart } from "@/components/charts/DonutChart";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Globe } from "lucide-react";
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -45,6 +49,18 @@ const textareaClass = cn(
   "disabled:cursor-not-allowed disabled:opacity-50"
 );
 
+function normalizeBasePathInput(raw: string): string {
+  let p = raw.trim();
+  if (!p || p === "/") return "/";
+  if (!p.startsWith("/")) p = `/${p}`;
+  if (p.length > 1) p = p.replace(/\/+$/, "");
+  return p === "" ? "/" : p;
+}
+
+function looksLikeIpv4(host: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host.trim());
+}
+
 export function Settings() {
   const [instance, setInstance] = useState<InstanceSettings | null>(null);
   const [setup, setSetup] = useState<SetupStatus | null>(null);
@@ -54,25 +70,54 @@ export function Settings() {
   const [selfUpdate, setSelfUpdate] = useState<SelfUpdateSettingsResponse | null>(null);
   const [suOpts, setSuOpts] = useState({ branch: "", pollMs: "", autoApply: "false" });
   const [suBusy, setSuBusy] = useState<"enable" | "check" | "apply" | "saveOpts" | null>(null);
+  const [publicDomainDraft, setPublicDomainDraft] = useState("");
+  const [publicBasePathDraft, setPublicBasePathDraft] = useState("/");
+  const [certbotEmailDraft, setCertbotEmailDraft] = useState("");
+  const [publicUrlSaving, setPublicUrlSaving] = useState(false);
+  const [nginxApplying, setNginxApplying] = useState(false);
+  const [certbotRunning, setCertbotRunning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       setLoading(true);
       try {
-        const [i, s, su] = await Promise.all([getInstanceSettings(), getSetupStatus(), getSelfUpdateSettings()]);
-        if (!cancelled) {
-          setInstance(i);
-          setSetup(s);
+        const [i, s] = await Promise.all([getInstanceSettings(), getSetupStatus()]);
+        if (cancelled) return;
+        setInstance(i);
+        setSetup(s);
+        setPublicDomainDraft(i.publicDomain ?? "");
+        setPublicBasePathDraft(i.publicBasePath ?? "/");
+        setCertbotEmailDraft(i.certbotEmail ?? "");
+
+        try {
+          const su = await getSelfUpdateSettings();
+          if (cancelled) return;
           setSelfUpdate(su);
           setSuOpts({
             branch: su.branch,
             pollMs: su.pollMs > 0 ? String(su.pollMs) : "",
             autoApply: su.autoApply ? "true" : "false",
           });
+        } catch {
+          const fallback: SelfUpdateSettingsResponse = {
+            configured: i.selfUpdateConfigured,
+            branch: i.selfUpdateGitBranch,
+            pollMs: i.selfUpdatePollMs,
+            autoApply: i.selfUpdateAutoApply,
+            git: null,
+          };
+          if (!cancelled) {
+            setSelfUpdate(fallback);
+            setSuOpts({
+              branch: fallback.branch,
+              pollMs: fallback.pollMs > 0 ? String(fallback.pollMs) : "",
+              autoApply: fallback.autoApply ? "true" : "false",
+            });
+          }
         }
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Failed to load settings");
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load settings");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -110,20 +155,54 @@ export function Settings() {
     ];
   }, [instance]);
 
+  const publicUrlPreview = useMemo(() => {
+    const host = publicDomainDraft.trim().toLowerCase();
+    const path = normalizeBasePathInput(publicBasePathDraft);
+    if (!host) return null;
+    const proto = looksLikeIpv4(host) ? "http" : "https";
+    const origin = `${proto}://${host}`;
+    return path === "/" ? origin : `${origin}${path}`;
+  }, [publicDomainDraft, publicBasePathDraft]);
+
   const setEnvField = (key: string, value: string) => {
     setEnvDraft((d) => ({ ...d, [key]: value }));
   };
 
   const refreshSelfUpdate = async () => {
-    const su = await getSelfUpdateSettings();
-    setSelfUpdate(su);
-    setSuOpts({
-      branch: su.branch,
-      pollMs: su.pollMs > 0 ? String(su.pollMs) : "",
-      autoApply: su.autoApply ? "true" : "false",
-    });
+    try {
+      const su = await getSelfUpdateSettings();
+      setSelfUpdate(su);
+      setSuOpts({
+        branch: su.branch,
+        pollMs: su.pollMs > 0 ? String(su.pollMs) : "",
+        autoApply: su.autoApply ? "true" : "false",
+      });
+    } catch {
+      const i = await getInstanceSettings();
+      setInstance(i);
+      const fallback: SelfUpdateSettingsResponse = {
+        configured: i.selfUpdateConfigured,
+        branch: i.selfUpdateGitBranch,
+        pollMs: i.selfUpdatePollMs,
+        autoApply: i.selfUpdateAutoApply,
+        git: null,
+      };
+      setSelfUpdate(fallback);
+      setSuOpts({
+        branch: fallback.branch,
+        pollMs: fallback.pollMs > 0 ? String(fallback.pollMs) : "",
+        autoApply: fallback.autoApply ? "true" : "false",
+      });
+      setPublicDomainDraft(i.publicDomain ?? "");
+      setPublicBasePathDraft(i.publicBasePath ?? "/");
+      setCertbotEmailDraft(i.certbotEmail ?? "");
+      return;
+    }
     const i = await getInstanceSettings();
     setInstance(i);
+    setPublicDomainDraft(i.publicDomain ?? "");
+    setPublicBasePathDraft(i.publicBasePath ?? "/");
+    setCertbotEmailDraft(i.certbotEmail ?? "");
   };
 
   const onEnableSelfUpdate = async () => {
@@ -209,6 +288,80 @@ export function Settings() {
     }
   };
 
+  const onSavePublicUrlEnv = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const domain = publicDomainDraft.trim().toLowerCase();
+    const basePath = normalizeBasePathInput(publicBasePathDraft);
+    const email = certbotEmailDraft.trim();
+    const env: Record<string, string> = {};
+    if (domain) env.PUBLIC_DOMAIN = domain;
+    env.PUBLIC_BASE_PATH = basePath;
+    if (email) env.CERTBOT_EMAIL = email;
+    if (Object.keys(env).length === 0) {
+      toast.error("Enter a public hostname, base path, or Certbot email.");
+      return;
+    }
+    setPublicUrlSaving(true);
+    try {
+      const r = await patchInstanceEnv(env);
+      toast.success(r.message);
+      const i = await getInstanceSettings();
+      setInstance(i);
+      setPublicDomainDraft(i.publicDomain ?? "");
+      setPublicBasePathDraft(i.publicBasePath ?? "/");
+      setCertbotEmailDraft(i.certbotEmail ?? "");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save public URL");
+    } finally {
+      setPublicUrlSaving(false);
+    }
+  };
+
+  const onApplyNginxSite = async () => {
+    const domain = publicDomainDraft.trim().toLowerCase();
+    if (!domain) {
+      toast.error("Enter a public hostname (or save PUBLIC_DOMAIN to .env first).");
+      return;
+    }
+    setNginxApplying(true);
+    try {
+      const r = await applyNginxSite({
+        publicDomain: domain,
+        publicBasePath: normalizeBasePathInput(publicBasePathDraft),
+      });
+      toast.success(r.message);
+      const i = await getInstanceSettings();
+      setInstance(i);
+      setPublicDomainDraft(i.publicDomain ?? "");
+      setPublicBasePathDraft(i.publicBasePath ?? "/");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nginx apply failed");
+    } finally {
+      setNginxApplying(false);
+    }
+  };
+
+  const onRunCertbotSsl = async () => {
+    const domain = publicDomainDraft.trim().toLowerCase();
+    if (looksLikeIpv4(domain)) {
+      toast.error("Let's Encrypt needs a DNS hostname, not an IP address.");
+      return;
+    }
+    if (!certbotEmailDraft.trim()) {
+      toast.error("Enter a Let's Encrypt contact email (saved with public URL or below).");
+      return;
+    }
+    setCertbotRunning(true);
+    try {
+      const r = await requestCertbotSsl({ email: certbotEmailDraft.trim() });
+      toast.success(r.message);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Certbot failed");
+    } finally {
+      setCertbotRunning(false);
+    }
+  };
+
   const onSaveEnv = async (e: React.FormEvent) => {
     e.preventDefault();
     const env: Record<string, string> = {};
@@ -228,6 +381,9 @@ export function Settings() {
       const [i, s] = await Promise.all([getInstanceSettings(), getSetupStatus()]);
       setInstance(i);
       setSetup(s);
+      setPublicDomainDraft(i.publicDomain ?? "");
+      setPublicBasePathDraft(i.publicBasePath ?? "/");
+      setCertbotEmailDraft(i.certbotEmail ?? "");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update .env");
     } finally {
@@ -235,7 +391,7 @@ export function Settings() {
     }
   };
 
-  if (loading || !instance || !setup || !selfUpdate) {
+  if (loading || !instance || !setup) {
     return (
       <div className="w-full max-w-4xl space-y-8">
         <Skeleton className="h-10 w-64" />
@@ -244,6 +400,15 @@ export function Settings() {
       </div>
     );
   }
+
+  const selfUpdateSafe: SelfUpdateSettingsResponse =
+    selfUpdate ?? {
+      configured: instance.selfUpdateConfigured,
+      branch: instance.selfUpdateGitBranch,
+      pollMs: instance.selfUpdatePollMs,
+      autoApply: instance.selfUpdateAutoApply,
+      git: null,
+    };
 
   return (
     <div className="w-full max-w-4xl space-y-10">
@@ -266,6 +431,8 @@ export function Settings() {
               <Row label="Docker network" value={instance.dockerNetwork} />
               <Row label="Projects root" value={instance.projectsRootPath} />
               <Row label="Nginx config path" value={instance.nginxConfigPath} />
+              <Row label="Public hostname" value={instance.publicDomain || "—"} />
+              <Row label="Public base path" value={instance.publicBasePath || "/"} />
               <Row
                 label="Prisma schema sync"
                 value={
@@ -288,6 +455,103 @@ export function Settings() {
         </Card>
       </div>
 
+      <Card id="public-url" className="border-border/50 bg-card/60 ring-1 ring-border/30 scroll-mt-24">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe className="size-5 text-muted-foreground" aria-hidden />
+            Public URL and HTTPS
+          </CardTitle>
+          <CardDescription>
+            Same options as setup: deploy behind a hostname (and optional path like{" "}
+            <code className="rounded bg-muted px-1 font-mono text-xs">/versiongate</code>). Point DNS at this server, then apply nginx and run Certbot for TLS.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Alert>
+            <AlertTitle>DNS</AlertTitle>
+            <AlertDescription>
+              Add an <strong>A</strong> record for your hostname to this server&apos;s public IPv4 (cloud panel or{" "}
+              <code className="rounded bg-muted px-1 font-mono text-xs">curl -4 ifconfig.me</code> on the host). Propagation must finish before
+              Let&apos;s Encrypt can validate.
+            </AlertDescription>
+          </Alert>
+
+          <form onSubmit={(e) => void onSavePublicUrlEnv(e)} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Public hostname</p>
+                <Input
+                  placeholder="example.com"
+                  value={publicDomainDraft}
+                  onChange={(e) => setPublicDomainDraft(e.target.value)}
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">Hostname or IPv4 for HTTP. TLS requires a hostname.</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">URL base path</p>
+                <Input
+                  placeholder="/ or /versiongate"
+                  value={publicBasePathDraft}
+                  onChange={(e) => setPublicBasePathDraft(e.target.value)}
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">A leading slash is added if you omit it.</p>
+              </div>
+            </div>
+            <div className="space-y-2 sm:max-w-md">
+              <p className="text-sm font-medium text-foreground">Let&apos;s Encrypt contact email</p>
+              <Input
+                type="email"
+                placeholder="you@example.com"
+                value={certbotEmailDraft}
+                onChange={(e) => setCertbotEmailDraft(e.target.value)}
+                autoComplete="email"
+              />
+            </div>
+            {publicUrlPreview ? (
+              <p className="text-sm text-muted-foreground">
+                Preview:&nbsp;
+                <span className="font-mono text-foreground">{publicUrlPreview}</span>
+              </p>
+            ) : null}
+            {normalizeBasePathInput(publicBasePathDraft) !== "/" ? (
+              <p className="rounded-md border border-amber-300/80 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                Subpath URLs need the dashboard built with the same Vite <code className="font-mono text-xs">base</code>; otherwise static assets may
+                break. Using <code className="font-mono text-xs">/</code> is simplest.
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" size="sm" disabled={publicUrlSaving}>
+                {publicUrlSaving ? "Saving…" : "Save to .env"}
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={nginxApplying} onClick={() => void onApplyNginxSite()}>
+                {nginxApplying ? "Applying…" : "Write nginx config & reload"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={
+                  certbotRunning ||
+                  looksLikeIpv4(publicDomainDraft) ||
+                  !publicDomainDraft.trim() ||
+                  !certbotEmailDraft.trim()
+                }
+                onClick={() => void onRunCertbotSsl()}
+              >
+                {certbotRunning ? "Certbot…" : "Obtain SSL (certbot --nginx)"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Suggested order:</span> save hostname and email → DNS A record → write nginx (HTTP on port 80) →
+              Certbot. Certbot reads <code className="rounded bg-muted px-1 font-mono">PUBLIC_DOMAIN</code> from <code className="rounded bg-muted px-1 font-mono">.env</code>
+              — use Save or nginx apply first. Requires <code className="rounded bg-muted px-1 font-mono">certbot</code> and permission to reload nginx on the host.
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+
       <Card id="application-updates" className="border-border/50 bg-card/60 ring-1 ring-border/30 scroll-mt-24">
         <CardHeader>
           <CardTitle>Application updates</CardTitle>
@@ -300,42 +564,42 @@ export function Settings() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={selfUpdate.configured ? "default" : "secondary"} className="font-mono text-xs">
-              {selfUpdate.configured ? "Self-update enabled" : "Not enabled"}
+            <Badge variant={selfUpdateSafe.configured ? "default" : "secondary"} className="font-mono text-xs">
+              {selfUpdateSafe.configured ? "Self-update enabled" : "Not enabled"}
             </Badge>
-            {!selfUpdate.configured ? (
+            {!selfUpdateSafe.configured ? (
               <Button type="button" size="sm" disabled={suBusy !== null} onClick={() => void onEnableSelfUpdate()}>
                 {suBusy === "enable" ? "Enabling…" : "Enable in-dashboard updates"}
               </Button>
             ) : null}
           </div>
 
-          {selfUpdate.configured ? (
+          {selfUpdateSafe.configured ? (
             <>
               <dl className="space-y-3">
-                <Row label="Tracked branch" value={selfUpdate.branch} />
-                <Row label="Poll interval (ms)" value={selfUpdate.pollMs > 0 ? String(selfUpdate.pollMs) : "off"} />
-                <Row label="Auto-apply on poll" value={boolBadge(selfUpdate.autoApply, "Yes", "No")} />
+                <Row label="Tracked branch" value={selfUpdateSafe.branch} />
+                <Row label="Poll interval (ms)" value={selfUpdateSafe.pollMs > 0 ? String(selfUpdateSafe.pollMs) : "off"} />
+                <Row label="Auto-apply on poll" value={boolBadge(selfUpdateSafe.autoApply, "Yes", "No")} />
               </dl>
-              {selfUpdate.git ? (
+              {selfUpdateSafe.git ? (
                 <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm">
                   <p className="font-mono text-xs text-muted-foreground">
                     Local{" "}
                     <span className="text-foreground">
-                      {selfUpdate.git.currentCommit ? selfUpdate.git.currentCommit.slice(0, 7) : "—"}
+                      {selfUpdateSafe.git.currentCommit ? selfUpdateSafe.git.currentCommit.slice(0, 7) : "—"}
                     </span>
-                    {selfUpdate.git.remoteCommit ? (
+                    {selfUpdateSafe.git.remoteCommit ? (
                       <>
                         {" "}
-                        · remote <span className="text-foreground">{selfUpdate.git.remoteCommit.slice(0, 7)}</span>
+                        · remote <span className="text-foreground">{selfUpdateSafe.git.remoteCommit.slice(0, 7)}</span>
                       </>
                     ) : null}
                   </p>
-                  {selfUpdate.git.message ? (
-                    <p className="mt-1 text-amber-800">{selfUpdate.git.message}</p>
-                  ) : selfUpdate.git.behind ? (
+                  {selfUpdateSafe.git.message ? (
+                    <p className="mt-1 text-amber-800">{selfUpdateSafe.git.message}</p>
+                  ) : selfUpdateSafe.git.behind ? (
                     <p className="mt-1 text-foreground">Remote is ahead — you can update.</p>
-                  ) : selfUpdate.git.isGitRepo ? (
+                  ) : selfUpdateSafe.git.isGitRepo ? (
                     <p className="mt-1 text-muted-foreground">Up to date with origin.</p>
                   ) : (
                     <p className="mt-1 text-muted-foreground">Not a git checkout — use your image or package pipeline.</p>
@@ -353,7 +617,7 @@ export function Settings() {
                   type="button"
                   size="sm"
                   disabled={
-                    suBusy !== null || !selfUpdate.git?.isGitRepo || !selfUpdate.git.behind || Boolean(selfUpdate.git.message)
+                    suBusy !== null || !selfUpdateSafe.git?.isGitRepo || !selfUpdateSafe.git.behind || Boolean(selfUpdateSafe.git.message)
                   }
                   onClick={() => void onApplySelfUpdate()}
                 >

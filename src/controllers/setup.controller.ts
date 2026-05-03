@@ -18,6 +18,8 @@ import {
   SESSION_MAX_AGE_SEC,
 } from "../services/auth.service";
 import { buildSetSessionCookie } from "../utils/cookie";
+import { isValidHostname, isValidIpv4Address } from "../utils/domain-validation";
+import { generateVersionGateNginxConf } from "../utils/nginx-versiongate-site";
 
 interface SetupApplyBody {
   domain: string;
@@ -30,7 +32,6 @@ interface SetupApplyBody {
 const NGINX_CONF_PATH = "/etc/nginx/conf.d/versiongate.conf";
 const DB_URL_REGEX = /^DATABASE_URL\s*=\s*"?([^"\n\r]+)"?\s*$/m;
 const ENCRYPTION_KEY_REGEX = /^ENCRYPTION_KEY\s*=\s*"?([0-9a-fA-F]{64})"?\s*$/m;
-const HOSTNAME_LABEL_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
 
 function getEnvPath(): string {
   return envFilePath;
@@ -57,30 +58,6 @@ function readExistingEncryptionKey(): string | null {
   const content = readFileSync(envPath, "utf-8");
   const match = content.match(ENCRYPTION_KEY_REGEX);
   return match ? match[1] : null;
-}
-
-function isValidIpv4Address(value: string): boolean {
-  const octets = value.split(".");
-  if (octets.length !== 4) {
-    return false;
-  }
-
-  return octets.every((octet) => {
-    if (!/^\d{1,3}$/.test(octet)) {
-      return false;
-    }
-    const parsed = Number.parseInt(octet, 10);
-    return parsed >= 0 && parsed <= 255;
-  });
-}
-
-function isValidHostname(value: string): boolean {
-  if (value.length === 0 || value.length > 253 || value.startsWith(".") || value.endsWith(".")) {
-    return false;
-  }
-
-  const labels = value.split(".");
-  return labels.every((label) => HOSTNAME_LABEL_REGEX.test(label));
 }
 
 function escapeEnvValue(value: string): string {
@@ -204,6 +181,8 @@ NODE_ENV=production
 DOCKER_NETWORK="versiongate-net"
 NGINX_CONFIG_PATH="${NGINX_CONF_PATH}"
 PROJECTS_ROOT_PATH="${escapeEnvValue(projectsRootPath)}"
+PUBLIC_DOMAIN="${escapeEnvValue(normalizedDomain)}"
+PUBLIC_BASE_PATH="/"
 ENCRYPTION_KEY="${encryptionKey}"
 `;
 
@@ -283,28 +262,13 @@ ENCRYPTION_KEY="${encryptionKey}"
 
   // 4. Write Nginx config (best-effort — may not have permissions)
   try {
-    const serverName = domainIsIp ? "_" : normalizedDomain;
-    const listenDirective = domainIsIp ? "listen 80 default_server;" : "listen 80;";
-
-    const nginxConf = `server {
-    ${listenDirective}
-    server_name ${serverName};
-
-    client_max_body_size 50M;
-
-    location / {
-        proxy_pass         http://127.0.0.1:9090;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection 'upgrade';
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-`;
+    const nginxConf = generateVersionGateNginxConf({
+      serverName: domainIsIp ? "_" : normalizedDomain,
+      defaultServer: domainIsIp,
+      upstreamHost: "127.0.0.1",
+      upstreamPort: 9090,
+      basePath: "/",
+    });
     writeFileSync(NGINX_CONF_PATH, nginxConf, "utf-8");
 
     try {

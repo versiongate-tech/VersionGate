@@ -4,7 +4,7 @@ import { Info } from "lucide-react";
 import {
   ApiError,
   createProject,
-  getGithubIntegrationStatus,
+  getGithubInstallation,
   getGithubRepoBranches,
   type GithubInstallationSummary,
   type GithubRepoRow,
@@ -93,15 +93,16 @@ export function CreateProjectModal({
     if (!open) return;
     let cancelled = false;
     setGhLoading(true);
-    void getGithubIntegrationStatus()
-      .then((s) => {
+    void getGithubInstallation()
+      .then((r) => {
         if (cancelled) return;
-        setGhConnected(s.connected);
-        setGhInstallations(s.installations);
+        const connected = r.installation !== null;
+        setGhConnected(connected);
+        setGhInstallations(r.installations);
         const id =
-          s.installation?.installationId ?? s.installations[0]?.installationId ?? null;
+          r.installation?.installationId ?? r.installations[0]?.installationId ?? null;
         setSelectedInstallationId(id);
-        setGhSource(s.connected ? "github" : "manual");
+        setGhSource(connected ? "github" : "manual");
       })
       .catch(() => {
         if (!cancelled) {

@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, writeFileSync } from "fs";
+import { execFileSync } from "child_process";
 import { join } from "path";
 import { FastifyRequest, FastifyReply } from "fastify";
 import {
@@ -14,6 +15,8 @@ import { mergeIntoDotenv, writeEnvWithBackup } from "../utils/env-file";
 import { logger } from "../utils/logger";
 import { applySelfUpdate, getSelfUpdateStatus } from "../services/self-update.service";
 import { kickSelfUpdatePoll } from "../services/self-update-poll";
+import { isValidHostname, isValidIpv4Address } from "../utils/domain-validation";
+import { generateVersionGateNginxConf, normalizePublicBasePath } from "../utils/nginx-versiongate-site";
 
 const DB_URL_REGEX = /^DATABASE_URL\s*=\s*"?([^"\n\r]+)"?\s*$/m;
 
@@ -22,6 +25,25 @@ function readDatabaseUrlFromFile(): string | null {
   const content = readFileSync(envFilePath, "utf-8");
   const match = content.match(DB_URL_REGEX);
   return match?.[1] ?? null;
+}
+
+/** Reads a simple `KEY=value` from `.env` (quoted values stripped). */
+function readEnvKeyFromFile(key: string): string | null {
+  if (!existsSync(envFilePath)) return null;
+  const content = readFileSync(envFilePath, "utf-8");
+  for (const line of content.split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m || m[1] !== key) continue;
+    let v = m[2].trim();
+    if (
+      (v.startsWith('"') && v.endsWith('"')) ||
+      (v.startsWith("'") && v.endsWith("'"))
+    ) {
+      v = v.slice(1, -1);
+    }
+    return v;
+  }
+  return null;
 }
 
 async function canConnectToDatabase(databaseUrl: string): Promise<boolean> {
@@ -68,6 +90,10 @@ export async function getInstanceSettingsHandler(
   const encryptionKeyConfigured = Boolean(process.env.ENCRYPTION_KEY?.trim());
   const geminiConfigured = Boolean(config.geminiApiKey?.trim());
 
+  const publicDomain = readEnvKeyFromFile("PUBLIC_DOMAIN") ?? "";
+  const publicBasePath = normalizePublicBasePath(readEnvKeyFromFile("PUBLIC_BASE_PATH") ?? "/");
+  const certbotEmail = readEnvKeyFromFile("CERTBOT_EMAIL") ?? "";
+
   return reply.code(200).send({
     engineVersion,
     nodeEnv: process.env.NODE_ENV ?? "development",
@@ -82,6 +108,9 @@ export async function getInstanceSettingsHandler(
     needsRestart,
     encryptionKeyConfigured,
     geminiConfigured,
+    publicDomain,
+    publicBasePath,
+    certbotEmail,
     selfUpdateConfigured: Boolean(selfUpdateSecretLive()),
     selfUpdateGitBranch: selfUpdateBranchLive(),
     selfUpdatePollMs: selfUpdatePollMsLive(),
@@ -108,6 +137,9 @@ const PATCHABLE_ENV_KEYS = new Set([
   "SELF_UPDATE_GIT_BRANCH",
   "SELF_UPDATE_POLL_MS",
   "SELF_UPDATE_AUTO_APPLY",
+  "PUBLIC_DOMAIN",
+  "PUBLIC_BASE_PATH",
+  "CERTBOT_EMAIL",
 ]);
 
 interface PatchEnvBody {
@@ -192,6 +224,32 @@ export async function patchInstanceEnvHandler(
       });
     }
     updates.SELF_UPDATE_GIT_BRANCH = b;
+  }
+
+  if (updates.PUBLIC_DOMAIN !== undefined) {
+    const d = updates.PUBLIC_DOMAIN.trim().toLowerCase();
+    if (d && !isValidIpv4Address(d) && !isValidHostname(d)) {
+      return reply.code(400).send({
+        error: "ValidationError",
+        message: "PUBLIC_DOMAIN must be a valid hostname or IPv4 address",
+      });
+    }
+    updates.PUBLIC_DOMAIN = d;
+  }
+
+  if (updates.PUBLIC_BASE_PATH !== undefined) {
+    updates.PUBLIC_BASE_PATH = normalizePublicBasePath(updates.PUBLIC_BASE_PATH);
+  }
+
+  if (updates.CERTBOT_EMAIL !== undefined) {
+    const em = updates.CERTBOT_EMAIL.trim();
+    if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      return reply.code(400).send({
+        error: "ValidationError",
+        message: "CERTBOT_EMAIL must be a valid email address",
+      });
+    }
+    updates.CERTBOT_EMAIL = em;
   }
 
   try {
@@ -292,4 +350,163 @@ export async function postSelfUpdateApplyHandler(_req: FastifyRequest, reply: Fa
   const result = await applySelfUpdate(selfUpdateBranchLive());
   /** Always 200: outcome is in `result.ok` / `result.error` (avoids generic client treating merge/build failure as an HTTP exception). */
   reply.code(200).send(result);
+}
+
+function reloadNginxBestEffort(): void {
+  try {
+    execFileSync("nginx", ["-t"], { stdio: "pipe" });
+    execFileSync("nginx", ["-s", "reload"], { stdio: "pipe" });
+    return;
+  } catch (err) {
+    logger.debug({ err }, "nginx reload as current user failed — trying sudo");
+  }
+  execFileSync("sudo", ["-n", "/usr/sbin/nginx", "-t"], { stdio: "pipe" });
+  execFileSync("sudo", ["-n", "/usr/sbin/nginx", "-s", "reload"], { stdio: "pipe" });
+}
+
+interface ApplyNginxBody {
+  publicDomain?: string;
+  publicBasePath?: string;
+}
+
+/** Writes HTTP reverse-proxy config for VersionGate and reloads nginx. */
+export async function postNginxApplySiteHandler(
+  req: FastifyRequest<{ Body: ApplyNginxBody }>,
+  reply: FastifyReply
+): Promise<void> {
+  const body = req.body ?? {};
+  let domainRaw = (typeof body.publicDomain === "string" ? body.publicDomain : "").trim().toLowerCase();
+  if (!domainRaw) domainRaw = (readEnvKeyFromFile("PUBLIC_DOMAIN") ?? "").trim().toLowerCase();
+
+  const basePath = normalizePublicBasePath(
+    typeof body.publicBasePath === "string"
+      ? body.publicBasePath
+      : readEnvKeyFromFile("PUBLIC_BASE_PATH") ?? "/"
+  );
+
+  if (!domainRaw) {
+    return reply.code(400).send({
+      error: "BadRequest",
+      message: "Set Public hostname below or PUBLIC_DOMAIN in .env before applying nginx.",
+    });
+  }
+
+  const domainIsIp = isValidIpv4Address(domainRaw);
+  const domainIsHostname = isValidHostname(domainRaw);
+  if (!domainIsIp && !domainIsHostname) {
+    return reply.code(400).send({ error: "BadRequest", message: "Invalid public hostname or IP address." });
+  }
+
+  const conf = generateVersionGateNginxConf({
+    serverName: domainIsIp ? "_" : domainRaw,
+    defaultServer: domainIsIp,
+    upstreamHost: "127.0.0.1",
+    upstreamPort: config.port,
+    basePath,
+  });
+
+  const outPath = config.nginxConfigPath;
+  try {
+    writeFileSync(outPath, conf, "utf-8");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ err }, "postNginxApplySite: write failed");
+    return reply.code(500).send({ error: "WriteError", message: msg });
+  }
+
+  try {
+    reloadNginxBestEffort();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ err }, "postNginxApplySite: nginx reload failed");
+    return reply.code(500).send({
+      error: "NginxReloadFailed",
+      message:
+        "The config file was written but nginx reload failed (often requires root). Path: " +
+        outPath +
+        ". Try: sudo nginx -t && sudo nginx -s reload",
+      detail: msg,
+    });
+  }
+
+  try {
+    const next = mergeIntoDotenv({
+      PUBLIC_DOMAIN: domainRaw,
+      PUBLIC_BASE_PATH: basePath === "/" ? "/" : basePath,
+    });
+    writeEnvWithBackup(next);
+  } catch (err) {
+    logger.warn({ err }, "postNginxApplySite: could not persist PUBLIC_DOMAIN / PUBLIC_BASE_PATH to .env");
+  }
+
+  reply.code(200).send({
+    ok: true,
+    message: "Nginx configuration applied and nginx reloaded.",
+    path: outPath,
+    publicDomain: domainRaw,
+    publicBasePath: basePath,
+  });
+}
+
+interface CertbotBody {
+  email?: string;
+}
+
+/** Runs non-interactive Certbot nginx installer for PUBLIC_DOMAIN (hostname only). */
+export async function postCertbotSslHandler(
+  req: FastifyRequest<{ Body: CertbotBody }>,
+  reply: FastifyReply
+): Promise<void> {
+  const domain = (readEnvKeyFromFile("PUBLIC_DOMAIN") ?? "").trim().toLowerCase();
+  if (!domain || !isValidHostname(domain)) {
+    return reply.code(400).send({
+      error: "BadRequest",
+      message:
+        "PUBLIC_DOMAIN must be a DNS hostname (not a raw IP) for Let's Encrypt. Save it under Public URL first, then update DNS.",
+    });
+  }
+
+  const emailRaw =
+    (typeof req.body?.email === "string" ? req.body.email.trim() : "") ||
+    (readEnvKeyFromFile("CERTBOT_EMAIL") ?? "").trim();
+  if (!emailRaw || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+    return reply.code(400).send({
+      error: "BadRequest",
+      message: "Provide a Let's Encrypt contact email (form field or CERTBOT_EMAIL in .env).",
+    });
+  }
+
+  const args = [
+    "--nginx",
+    "-d",
+    domain,
+    "--non-interactive",
+    "--agree-tos",
+    "--email",
+    emailRaw,
+    "--redirect",
+  ];
+
+  try {
+    try {
+      execFileSync("certbot", args, { stdio: "pipe", timeout: 240_000 });
+    } catch (directErr) {
+      logger.debug({ err: directErr }, "certbot as current user failed — trying sudo -n");
+      execFileSync("sudo", ["-n", "certbot", ...args], { stdio: "pipe", timeout: 240_000 });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error({ err }, "certbot failed");
+    return reply.code(500).send({
+      error: "CertbotFailed",
+      message:
+        "Certbot could not obtain or install a certificate. Ensure DNS points to this server, ports 80/443 are reachable, certbot is installed, and nginx is healthy.",
+      detail: msg.slice(0, 1200),
+    });
+  }
+
+  reply.code(200).send({
+    ok: true,
+    message: "Certbot completed. Reload the site over HTTPS and consider COOKIE_SECURE=true if you serve only HTTPS.",
+  });
 }
