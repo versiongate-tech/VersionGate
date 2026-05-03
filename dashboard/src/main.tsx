@@ -12,6 +12,7 @@ import { Integrations } from "@/pages/Integrations";
 import { Setup } from "@/pages/Setup";
 import { Activity } from "@/pages/Activity";
 import { Login } from "@/pages/Login";
+import { Settings } from "@/pages/Settings";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -28,6 +29,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/system" element={<SystemHealth />} />
           <Route path="/server" element={<Navigate to="/system" replace />} />
           <Route path="/dashboard/integrations" element={<Integrations />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
