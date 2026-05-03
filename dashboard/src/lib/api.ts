@@ -404,7 +404,11 @@ export function applyNginxSite(body: {
   return request("POST", "/settings/nginx/apply", body);
 }
 
-export function requestCertbotSsl(body: { email?: string }): Promise<{ ok: boolean; message: string }> {
+export function requestCertbotSsl(body: {
+  email?: string;
+  /** Sent to API so `.env` matches the form before Certbot runs (recommended when switching subdomain). */
+  publicDomain?: string;
+}): Promise<{ ok: boolean; message: string }> {
   return request("POST", "/settings/ssl/certbot", body);
 }
 

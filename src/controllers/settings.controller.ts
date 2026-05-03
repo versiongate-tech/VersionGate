@@ -450,6 +450,8 @@ export async function postNginxApplySiteHandler(
 
 interface CertbotBody {
   email?: string;
+  /** When set, validated and merged into `.env` as PUBLIC_DOMAIN before Certbot runs (avoids stale apex domain). */
+  publicDomain?: string;
 }
 
 /** Runs non-interactive Certbot nginx installer for PUBLIC_DOMAIN (hostname only). */
@@ -457,12 +459,33 @@ export async function postCertbotSslHandler(
   req: FastifyRequest<{ Body: CertbotBody }>,
   reply: FastifyReply
 ): Promise<void> {
-  const domain = (readEnvKeyFromFile("PUBLIC_DOMAIN") ?? "").trim().toLowerCase();
+  const bodyDomainRaw =
+    typeof req.body?.publicDomain === "string" ? req.body.publicDomain.trim().toLowerCase() : "";
+  let domain = (readEnvKeyFromFile("PUBLIC_DOMAIN") ?? "").trim().toLowerCase();
+
+  if (bodyDomainRaw) {
+    if (!isValidHostname(bodyDomainRaw)) {
+      return reply.code(400).send({
+        error: "BadRequest",
+        message: "publicDomain must be a valid DNS hostname (subdomains allowed).",
+      });
+    }
+    domain = bodyDomainRaw;
+    try {
+      const next = mergeIntoDotenv({ PUBLIC_DOMAIN: domain });
+      writeEnvWithBackup(next);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error({ err }, "postCertbotSsl: could not persist PUBLIC_DOMAIN");
+      return reply.code(500).send({ error: "WriteError", message: msg });
+    }
+  }
+
   if (!domain || !isValidHostname(domain)) {
     return reply.code(400).send({
       error: "BadRequest",
       message:
-        "PUBLIC_DOMAIN must be a DNS hostname (not a raw IP) for Let's Encrypt. Save it under Public URL first, then update DNS.",
+        "PUBLIC_DOMAIN must be a DNS hostname (not a raw IP) for Let's Encrypt. Enter the hostname in Settings (or save it to .env), then update DNS.",
     });
   }
 

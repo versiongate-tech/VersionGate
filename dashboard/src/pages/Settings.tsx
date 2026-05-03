@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  ApiError,
   applyNginxSite,
   applySelfUpdateFromSettings,
   checkSelfUpdateFromSettings,
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Globe } from "lucide-react";
+import { formatPublicDashboardUrl, looksLikeIpv4, normalizePublicBasePath } from "@/lib/public-url";
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -48,18 +50,6 @@ const textareaClass = cn(
   "placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
   "disabled:cursor-not-allowed disabled:opacity-50"
 );
-
-function normalizeBasePathInput(raw: string): string {
-  let p = raw.trim();
-  if (!p || p === "/") return "/";
-  if (!p.startsWith("/")) p = `/${p}`;
-  if (p.length > 1) p = p.replace(/\/+$/, "");
-  return p === "" ? "/" : p;
-}
-
-function looksLikeIpv4(host: string): boolean {
-  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host.trim());
-}
 
 export function Settings() {
   const [instance, setInstance] = useState<InstanceSettings | null>(null);
@@ -129,13 +119,16 @@ export function Settings() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.location.hash === "#application-updates") {
+    const scrollToHash = () => {
+      const id = window.location.hash.replace(/^#/, "");
+      if (id !== "application-updates" && id !== "dashboard-url") return;
       window.requestAnimationFrame(() => {
-        document
-          .getElementById("application-updates")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
-    }
+    };
+    scrollToHash();
+    window.addEventListener("hashchange", scrollToHash);
+    return () => window.removeEventListener("hashchange", scrollToHash);
   }, []);
 
   const checkSummary = useMemo(() => {
@@ -156,12 +149,7 @@ export function Settings() {
   }, [instance]);
 
   const publicUrlPreview = useMemo(() => {
-    const host = publicDomainDraft.trim().toLowerCase();
-    const path = normalizeBasePathInput(publicBasePathDraft);
-    if (!host) return null;
-    const proto = looksLikeIpv4(host) ? "http" : "https";
-    const origin = `${proto}://${host}`;
-    return path === "/" ? origin : `${origin}${path}`;
+    return formatPublicDashboardUrl(publicDomainDraft, publicBasePathDraft);
   }, [publicDomainDraft, publicBasePathDraft]);
 
   const setEnvField = (key: string, value: string) => {
@@ -291,7 +279,7 @@ export function Settings() {
   const onSavePublicUrlEnv = async (e: React.FormEvent) => {
     e.preventDefault();
     const domain = publicDomainDraft.trim().toLowerCase();
-    const basePath = normalizeBasePathInput(publicBasePathDraft);
+    const basePath = normalizePublicBasePath(publicBasePathDraft);
     const email = certbotEmailDraft.trim();
     const env: Record<string, string> = {};
     if (domain) env.PUBLIC_DOMAIN = domain;
@@ -327,7 +315,7 @@ export function Settings() {
     try {
       const r = await applyNginxSite({
         publicDomain: domain,
-        publicBasePath: normalizeBasePathInput(publicBasePathDraft),
+        publicBasePath: normalizePublicBasePath(publicBasePathDraft),
       });
       toast.success(r.message);
       const i = await getInstanceSettings();
@@ -353,10 +341,22 @@ export function Settings() {
     }
     setCertbotRunning(true);
     try {
-      const r = await requestCertbotSsl({ email: certbotEmailDraft.trim() });
+      const r = await requestCertbotSsl({
+        email: certbotEmailDraft.trim(),
+        publicDomain: domain || undefined,
+      });
       toast.success(r.message);
+      const i = await getInstanceSettings();
+      setInstance(i);
+      setPublicDomainDraft(i.publicDomain ?? "");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Certbot failed");
+      let msg = err instanceof Error ? err.message : "Certbot failed";
+      let detail: string | undefined;
+      if (err instanceof ApiError && err.body && typeof err.body === "object") {
+        const d = (err.body as { detail?: unknown }).detail;
+        if (typeof d === "string" && d.trim()) detail = d.trim().slice(0, 800);
+      }
+      toast.error(msg, detail ? { description: detail } : undefined);
     } finally {
       setCertbotRunning(false);
     }
@@ -455,15 +455,16 @@ export function Settings() {
         </Card>
       </div>
 
-      <Card id="public-url" className="border-border/50 bg-card/60 ring-1 ring-border/30 scroll-mt-24">
+      <Card id="dashboard-url" className="border-border/50 bg-card/60 ring-1 ring-border/30 scroll-mt-24">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Globe className="size-5 text-muted-foreground" aria-hidden />
-            Public URL and HTTPS
+            Dashboard URL &amp; hostname
           </CardTitle>
           <CardDescription>
-            Same options as setup: deploy behind a hostname (and optional path like{" "}
-            <code className="rounded bg-muted px-1 font-mono text-xs">/versiongate</code>). Point DNS at this server, then apply nginx and run Certbot for TLS.
+            Change the <strong className="font-medium text-foreground">domain / hostname</strong> and optional{" "}
+            <strong className="font-medium text-foreground">URL path</strong> where users open VersionGate (same as first-time setup). Below you can also
+            configure HTTPS.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -479,24 +480,29 @@ export function Settings() {
           <form onSubmit={(e) => void onSavePublicUrlEnv(e)} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">Public hostname</p>
+                <p className="text-sm font-medium text-foreground">Hostname (domain)</p>
                 <Input
-                  placeholder="example.com"
+                  placeholder="versiongate.example.com"
                   value={publicDomainDraft}
                   onChange={(e) => setPublicDomainDraft(e.target.value)}
                   autoComplete="off"
                 />
-                <p className="text-xs text-muted-foreground">Hostname or IPv4 for HTTP. TLS requires a hostname.</p>
+                <p className="text-xs text-muted-foreground">
+                  DNS name or IP shown in the browser (apex <code className="font-mono text-[11px]">example.com</code>, subdomain, or IPv4). TLS needs a
+                  hostname, not only an IP.
+                </p>
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">URL base path</p>
+                <p className="text-sm font-medium text-foreground">URL path (optional)</p>
                 <Input
                   placeholder="/ or /versiongate"
                   value={publicBasePathDraft}
                   onChange={(e) => setPublicBasePathDraft(e.target.value)}
                   autoComplete="off"
                 />
-                <p className="text-xs text-muted-foreground">A leading slash is added if you omit it.</p>
+                <p className="text-xs text-muted-foreground">
+                  Path after the hostname if VersionGate is not at the site root. A leading slash is added if omitted.
+                </p>
               </div>
             </div>
             <div className="space-y-2 sm:max-w-md">
@@ -515,7 +521,7 @@ export function Settings() {
                 <span className="font-mono text-foreground">{publicUrlPreview}</span>
               </p>
             ) : null}
-            {normalizeBasePathInput(publicBasePathDraft) !== "/" ? (
+            {normalizePublicBasePath(publicBasePathDraft) !== "/" ? (
               <p className="rounded-md border border-amber-300/80 bg-amber-50 px-3 py-2 text-sm text-amber-950">
                 Subpath URLs need the dashboard built with the same Vite <code className="font-mono text-xs">base</code>; otherwise static assets may
                 break. Using <code className="font-mono text-xs">/</code> is simplest.
@@ -544,9 +550,11 @@ export function Settings() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Suggested order:</span> save hostname and email → DNS A record → write nginx (HTTP on port 80) →
-              Certbot. Certbot reads <code className="rounded bg-muted px-1 font-mono">PUBLIC_DOMAIN</code> from <code className="rounded bg-muted px-1 font-mono">.env</code>
-              — use Save or nginx apply first. Requires <code className="rounded bg-muted px-1 font-mono">certbot</code> and permission to reload nginx on the host.
+              <span className="font-medium text-foreground">Suggested order:</span> set hostname to the exact name you want a certificate for (e.g.{" "}
+              <code className="font-mono text-xs">versiongate.dineshkorukonda.online</code>) → add a DNS <strong>A</strong> or <strong>CNAME</strong> for that
+              name to this server → <strong>Write nginx config &amp; reload</strong> (so <code className="font-mono text-xs">server_name</code> matches) →
+              then <strong>Obtain SSL</strong>. Apex DNS alone does not cover a subdomain—you need a record for the subdomain itself. Running SSL writes the hostname to{" "}
+              <code className="rounded bg-muted px-1 font-mono">.env</code>. Requires <code className="rounded bg-muted px-1 font-mono">certbot</code>, nginx on port 80, and reload privileges (often sudo).
             </p>
           </form>
         </CardContent>

@@ -128,7 +128,7 @@ export function Setup() {
             <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="vg-domain" className="text-sm font-medium">
-                  Public hostname or IP
+                  Hostname (domain or IP)
                 </label>
                 <Input
                   id="vg-domain"

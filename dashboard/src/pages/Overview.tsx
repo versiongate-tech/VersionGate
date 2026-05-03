@@ -4,11 +4,13 @@ import { SimpleBarChart } from "@/components/charts/SimpleBarChart";
 import { Link, useNavigate } from "react-router-dom";
 import {
   getAllDeployments,
+  getInstanceSettings,
   getProjects,
   listAllJobs,
   listProjectJobs,
   triggerDeploy,
   type Deployment,
+  type InstanceSettings,
   type JobRecord,
   type Project,
 } from "@/lib/api";
@@ -36,8 +38,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BookOpen, Shield, Terminal } from "lucide-react";
+import { formatPublicDashboardUrl, normalizePublicBasePath } from "@/lib/public-url";
 import { AggregateJobLogStream } from "@/components/AggregateJobLogStream";
+import { BookOpen, Globe, Shield, Terminal } from "lucide-react";
 
 function timeAgo(date: string): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -64,19 +67,22 @@ export function Overview() {
   const [latestJobs, setLatestJobs] = useState<Record<string, JobRecord | undefined>>({});
   const [recentJobs, setRecentJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [instanceSettings, setInstanceSettings] = useState<InstanceSettings | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [p, d, allJobs] = await Promise.all([
+      const [p, d, allJobs, inst] = await Promise.all([
         getProjects(),
         getAllDeployments(),
         listAllJobs({ limit: 5 }),
+        getInstanceSettings().catch(() => null),
       ]);
       setProjects(p.projects);
       setDeployments(d.deployments);
       setRecentJobs(allJobs.jobs);
+      setInstanceSettings(inst);
 
       const jobEntries = await Promise.all(
         p.projects.map(async (proj) => {
@@ -140,6 +146,11 @@ export function Overview() {
       .map(([name, value]) => ({ name, value }));
   }, [recentJobs]);
 
+  const dashboardPublicUrl = useMemo(() => {
+    if (!instanceSettings) return null;
+    return formatPublicDashboardUrl(instanceSettings.publicDomain ?? "", instanceSettings.publicBasePath ?? "/");
+  }, [instanceSettings]);
+
   const onDeploy = async (projectId: string) => {
     try {
       const r = await triggerDeploy(projectId);
@@ -202,6 +213,55 @@ export function Overview() {
           <Button onClick={launchCreate}>Add project</Button>
         </div>
       </div>
+
+      <Card className="border-border/80 bg-card shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Globe className="size-5 text-muted-foreground" aria-hidden />
+            Dashboard hostname &amp; URL
+          </CardTitle>
+          <CardDescription>
+            Where this VersionGate UI is meant to be reached (DNS hostname and optional path). Change these when you move to a new domain or subdomain.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-2">
+            {dashboardPublicUrl ? (
+              <>
+                <a
+                  href={dashboardPublicUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all font-mono text-sm text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+                >
+                  {dashboardPublicUrl}
+                </a>
+                {instanceSettings ? (
+                  <p className="text-xs text-muted-foreground">
+                    Hostname{" "}
+                    <span className="font-mono text-foreground">{instanceSettings.publicDomain || "—"}</span>
+                    {" · "}
+                    Path{" "}
+                    <span className="font-mono text-foreground">
+                      {normalizePublicBasePath(instanceSettings.publicBasePath || "/")}
+                    </span>
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No public hostname configured yet. Set the domain or subdomain where operators should open VersionGate, then point DNS and nginx at this server.
+              </p>
+            )}
+          </div>
+          <Link
+            to="/settings#dashboard-url"
+            className={buttonVariants({ variant: "default", size: "sm", className: "w-full shrink-0 sm:w-auto" })}
+          >
+            Change domain &amp; hostname
+          </Link>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-primary/25 bg-primary text-primary-foreground shadow-md">
