@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
 import { existsSync } from "fs";
 import { join } from "path";
 import { config } from "./config/env";
@@ -17,6 +17,7 @@ import { jobRoutes } from "./routes/job.routes";
 import { requireDatabaseConfigured } from "./middleware/require-database";
 import { requireApiAuth } from "./middleware/require-api-auth";
 import { authRoutes } from "./routes/auth.routes";
+import { githubAppRoutes } from "./routes/github-app.routes";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -26,6 +27,22 @@ export async function buildApp(): Promise<FastifyInstance> {
     disableRequestLogging: true, // manual logging below — API only
     /** Default 10s is too tight when cold-starting many plugins (e.g. websocket) on slow disks. */
     pluginTimeout: 120_000,
+  });
+
+  // Raw body for GitHub App webhooks (signature verification must use unparsed bytes).
+  app.addHook("preParsing", async (request, _reply, payload) => {
+    const pathOnly = request.url.split("?")[0];
+    if (pathOnly !== "/api/webhooks/github" || request.method !== "POST") {
+      return payload;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of payload) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const raw = Buffer.concat(chunks);
+    (request as FastifyRequest & { rawBody?: Buffer }).rawBody = raw;
+    const { Readable } = await import("node:stream");
+    return Readable.from(raw);
   });
 
   // ── API access log: skip noisy dashboard polling (successful GETs only) ─────
@@ -113,6 +130,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ── API Routes (registered before static — order matters) ──────────────────
   await app.register(authRoutes, { prefix: "/api/v1" });
+  await app.register(githubAppRoutes, { prefix: "/api" });
 
   const dbRoutes = async (instance: FastifyInstance): Promise<void> => {
     instance.addHook("preHandler", requireDatabaseConfigured);

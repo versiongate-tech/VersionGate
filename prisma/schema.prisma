@@ -21,12 +21,26 @@ enum DeploymentColor {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     Session[]
+  id                  String                @id @default(cuid())
+  email               String                @unique
+  passwordHash        String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  sessions            Session[]
+  githubInstallations GitHubInstallation[]
+}
+
+/// GitHub App installation linked to a VersionGate user (for API + repo listing).
+model GitHubInstallation {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installationId       BigInt   @unique
+  githubAccountLogin   String
+  githubAccountType    String
+  createdAt            DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Session {

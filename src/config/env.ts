@@ -68,6 +68,13 @@ export const config = {
     optionalEnv("SKIP_MIGRATE_ON_BOOT", "") === "1",
   /** Session cookie `Secure` flag — enable when the UI is HTTPS-only. */
   cookieSecure: optionalEnv("COOKIE_SECURE", "").toLowerCase() === "true",
+
+  /** GitHub App (REST + webhooks). PEM may use `\n` escapes in `.env`. */
+  githubAppId: optionalEnv("GITHUB_APP_ID", "").trim(),
+  githubAppClientId: optionalEnv("GITHUB_APP_CLIENT_ID", "").trim(),
+  githubAppPrivateKey: optionalEnv("GITHUB_APP_PRIVATE_KEY", "").replace(/\\n/g, "\n"),
+  /** Verifies GitHub App webhook signatures & signs GitHub App install `state` (recommended). */
+  githubWebhookSecret: optionalEnv("GITHUB_WEBHOOK_SECRET", "").trim(),
 } as const;
 
 /** Live values (updated when .env is patched at runtime). */

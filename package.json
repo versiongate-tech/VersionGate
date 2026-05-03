@@ -27,6 +27,8 @@
     "@fastify/sensible": "^5.5.0",
     "@fastify/static": "^6.12.0",
     "@fastify/websocket": "10.0.1",
+    "@octokit/auth-app": "^8.2.0",
+    "@octokit/rest": "^22.0.1",
     "@prisma/client": "^5.10.0",
     "axios": "^1.6.7",
     "dotenv": "^16.4.5",
