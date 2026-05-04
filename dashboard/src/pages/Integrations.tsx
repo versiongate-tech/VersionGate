@@ -20,6 +20,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const MANAGE_APP_HREF = "https://github.com/apps/VersionGate-App/installations";
 const INSTALL_HREF = "/api/auth/github/install";
+/** Central relay — GitHub App "Callback URL" (fixed for all self-hosted instances). */
+const GITHUB_APP_RELAY_CALLBACK = "https://versiongate.tech/api/github/callback";
 
 export function Integrations() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -82,8 +84,8 @@ export function Integrations() {
     return g ? g.trim().toLowerCase() : null;
   }, [searchParams]);
 
-  const githubCallbackUrl = useMemo(
-    () => (typeof window !== "undefined" ? `${window.location.origin}/api/auth/github/callback` : ""),
+  const webhookUrlHint = useMemo(
+    () => (typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/github` : ""),
     []
   );
 
@@ -98,6 +100,10 @@ export function Integrations() {
       config: { type: "error", text: "GitHub App is not configured on this server." },
       missing_installation: { type: "error", text: "Missing installation from GitHub redirect." },
       bad_installation: { type: "error", text: "Could not read installation details from GitHub." },
+      bad_state: {
+        type: "error",
+        text: "Install state does not match this instance — check PUBLIC_URL and GITHUB_STATE_SECRET match the relay.",
+      },
     };
     const m = messages[githubQuery];
     if (m) {
@@ -117,23 +123,25 @@ export function Integrations() {
       />
 
       <Alert className="border-border/80 bg-muted/20">
-        <AlertTitle>Return to VersionGate after GitHub install</AlertTitle>
+        <AlertTitle>GitHub App URLs (self-hosted)</AlertTitle>
         <AlertDescription className="space-y-2 text-muted-foreground [&_p]:text-sm">
           <p>
-            If you finish install on GitHub but stay on <span className="font-mono text-xs">github.com/settings/installations</span>, your GitHub App{" "}
-            <strong className="text-foreground">Callback URL</strong> is not pointing at this server. In GitHub →{" "}
-            <strong className="text-foreground">Settings → Applications → VersionGate-App</strong> (or the org app settings), set{" "}
-            <strong className="text-foreground">Callback URL</strong> to exactly:
+            The GitHub App <strong className="text-foreground">Callback URL</strong> is fixed for every instance — register this relay on GitHub → App → General:
           </p>
-          {githubCallbackUrl ? (
+          <code className="block max-w-full overflow-x-auto break-all rounded-md bg-background px-2 py-1.5 font-mono text-xs text-foreground">
+            {GITHUB_APP_RELAY_CALLBACK}
+          </code>
+          <p>
+            Set <strong className="text-foreground">Webhook URL</strong> to your instance (same host as{" "}
+            <span className="font-mono text-xs">PUBLIC_URL</span> in <span className="font-mono text-xs">.env</span>), for example:
+          </p>
+          {webhookUrlHint ? (
             <code className="block max-w-full overflow-x-auto break-all rounded-md bg-background px-2 py-1.5 font-mono text-xs text-foreground">
-              {githubCallbackUrl}
+              {webhookUrlHint}
             </code>
           ) : null}
           <p>
-            Optionally set the same value as <strong className="text-foreground">Setup URL</strong> so GitHub sends users back here automatically. Use{" "}
-            <strong className="text-foreground">Connect GitHub</strong> below so your session is linked. If the API is reached on a different host than this page, set{" "}
-            <span className="font-mono text-xs">PUBLIC_APP_URL</span> in <span className="font-mono text-xs">.env</span> and register that callback URL in the GitHub App.
+            Use <strong className="text-foreground">Connect GitHub</strong> below while signed in so the installation is linked to your account when GitHub sends you back via the relay.
           </p>
         </AlertDescription>
       </Alert>

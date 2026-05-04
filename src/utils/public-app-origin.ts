@@ -27,6 +27,8 @@ export function inferOriginFromRequest(req: FastifyRequest): string {
  * Canonical public origin: `PUBLIC_APP_URL` → request Host → `https://` + `PUBLIC_DOMAIN`.
  */
 export function resolvePublicAppOrigin(req: FastifyRequest): string {
+  if (config.publicUrl) return config.publicUrl;
+
   const fromEnv = (process.env.PUBLIC_APP_URL ?? "").trim().replace(/\/+$/, "");
   if (fromEnv) return fromEnv;
 

@@ -28,6 +28,10 @@ function optionalEnv(key: string, fallback: string): string {
   return process.env[key] ?? fallback;
 }
 
+function normalizePublicUrl(raw: string): string {
+  return raw.trim().replace(/\/+$/, "");
+}
+
 const prismaSchemaSyncRaw = optionalEnv("PRISMA_SCHEMA_SYNC", "migrate").trim().toLowerCase();
 const prismaSchemaSync: "migrate" | "push" =
   prismaSchemaSyncRaw === "push" ? "push" : "migrate";
@@ -73,8 +77,18 @@ export const config = {
   githubAppId: optionalEnv("GITHUB_APP_ID", "").trim(),
   githubAppClientId: optionalEnv("GITHUB_APP_CLIENT_ID", "").trim(),
   githubAppPrivateKey: optionalEnv("GITHUB_APP_PRIVATE_KEY", "").replace(/\\n/g, "\n"),
-  /** Verifies GitHub App webhook signatures & signs GitHub App install `state` (recommended). */
+  /** Verifies GitHub App webhook signatures (X-Hub-Signature-256). */
   githubWebhookSecret: optionalEnv("GITHUB_WEBHOOK_SECRET", "").trim(),
+
+  /**
+   * Public base URL of this instance (no trailing slash), e.g. `https://vg.example.com`.
+   * Required for GitHub App install flow (relay signs `state` with `GITHUB_STATE_SECRET`).
+   */
+  publicUrl: normalizePublicUrl(optionalEnv("PUBLIC_URL", "")),
+  /**
+   * Shared with the versiongate.tech install relay — HMAC for GitHub `state` (same value as relay `RELAY_SECRET`).
+   */
+  githubStateSecret: optionalEnv("GITHUB_STATE_SECRET", "").trim(),
 } as const;
 
 /** Live values (updated when .env is patched at runtime). */

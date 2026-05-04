@@ -10,7 +10,7 @@ import { enqueueJob } from "../services/job-queue";
 import { getUserFromSessionToken } from "../services/auth.service";
 import { getSessionTokenFromRequest } from "../utils/cookie";
 import { logger } from "../utils/logger";
-import { createInstallState, parseInstallState } from "../utils/github-install-state";
+import { createRelayInstallState, parseRelayInstallState } from "../utils/github-install-state";
 import { getInstallationAccessToken } from "../utils/github-installation-token";
 import { normalizeGithubRepoUrl } from "../utils/github-repo-url";
 import { verifyGithubWebhookSignature } from "../utils/github-webhook-signature";
@@ -42,6 +42,15 @@ export async function githubInstallHandler(req: FastifyRequest, reply: FastifyRe
     return;
   }
 
+  if (!config.publicUrl || !config.githubStateSecret) {
+    reply.code(503).send({
+      error: "ServiceUnavailable",
+      message:
+        "GitHub App install requires PUBLIC_URL (this instance's public base URL) and GITHUB_STATE_SECRET (shared with the versiongate.tech relay).",
+    });
+    return;
+  }
+
   const raw = getSessionTokenFromRequest(req.headers.cookie);
   const user = await getUserFromSessionToken(raw);
   if (!user) {
@@ -49,18 +58,17 @@ export async function githubInstallHandler(req: FastifyRequest, reply: FastifyRe
     return;
   }
 
+  const state = createRelayInstallState(user.id, config.publicUrl, config.githubStateSecret);
   const url = new URL(INSTALL_APP_URL);
-  const secret = config.githubWebhookSecret;
-  if (secret) {
-    url.searchParams.set("state", createInstallState(user.id, secret));
-  }
+  url.searchParams.set("state", state);
 
   logger.info(
     {
       userId: user.id,
+      instanceUrl: config.publicUrl,
       redirectAfterInstall: dashboardIntegrationsAbsoluteUrl(req, { github: "connected" }),
     },
-    "githubInstall: redirecting user to GitHub App install"
+    "githubInstall: redirecting user to GitHub App install (relay state)"
   );
 
   reply.redirect(302, url.toString());
@@ -83,9 +91,10 @@ export async function githubCallbackHandler(
       installationId: installationIdStr || undefined,
       setupAction: setupAction || undefined,
       host: req.headers.host,
+      hasState: Boolean(req.query.state),
       origin: dashboardIntegrationsAbsoluteUrl(req, {}),
     },
-    "githubCallback: received redirect from GitHub"
+    "githubCallback: received redirect (GitHub relay or direct)"
   );
 
   if (!installationIdStr || !/^\d+$/.test(installationIdStr)) {
@@ -93,17 +102,28 @@ export async function githubCallbackHandler(
     return;
   }
 
-  const secret = config.githubWebhookSecret;
-  let userId = secret ? parseInstallState(req.query.state, secret) : null;
-  if (!userId) {
-    const raw = getSessionTokenFromRequest(req.headers.cookie);
-    const user = await getUserFromSessionToken(raw);
-    userId = user?.id ?? null;
-  }
-  if (!userId) {
+  const rawCookie = getSessionTokenFromRequest(req.headers.cookie);
+  const sessionUser = await getUserFromSessionToken(rawCookie);
+  if (!sessionUser) {
     reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, { github: "auth_required" }));
     return;
   }
+
+  const stateQ = typeof req.query.state === "string" ? req.query.state : undefined;
+  if (stateQ && config.githubStateSecret && config.publicUrl) {
+    const parsed = parseRelayInstallState(stateQ, config.githubStateSecret);
+    if (parsed) {
+      const want = config.publicUrl.trim().replace(/\/+$/, "");
+      const got = parsed.instanceUrl.trim().replace(/\/+$/, "");
+      if (got !== want) {
+        logger.warn({ got, want }, "githubCallback: relay state instanceUrl does not match PUBLIC_URL");
+        reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, { github: "bad_state" }));
+        return;
+      }
+    }
+  }
+
+  const userId = sessionUser.id;
 
   if (setupAction === "request") {
     reply.redirect(302, dashboardIntegrationsAbsoluteUrl(req, {}));
