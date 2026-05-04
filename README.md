@@ -99,6 +99,13 @@ After setup finishes, open the dashboard and start adding projects.
 
 No manual `.env` edits or Prisma commands are required after opening `/setup`.
 
+### GitHub App (Integrations)
+
+Self-hosted instances use a **fixed callback** on the public relay: register **Callback URL** `https://versiongate.tech/api/github/callback` in the GitHub App settings (same for every deployment).
+
+- Set **`PUBLIC_URL`** in `.env` to this instance’s public base URL (no trailing slash) and **`GITHUB_STATE_SECRET`** to the same value as the relay’s `RELAY_SECRET` (used to sign the install `state`).
+- Set the app’s **Webhook URL** to `{PUBLIC_URL}/api/webhooks/github` (push events, etc. go to your server). **POST** `/api/webhooks/github` is unchanged and still verified with **`GITHUB_WEBHOOK_SECRET`**.
+
 ---
 
 ## Docs
