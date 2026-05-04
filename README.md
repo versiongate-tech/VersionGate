@@ -16,15 +16,17 @@ Built for single-server (KVM/VPS) setups where you want Vercel-style deployments
 
 ## Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Bun 1.x + TypeScript |
-| API server | Fastify |
-| Database | PostgreSQL via Prisma (Neon serverless supported) |
-| Containers | Docker CLI |
-| Proxy | Nginx upstream config management |
-| Process manager | PM2 (recommended) |
-| Dashboard | React / Vite (static build, served by Fastify) |
+
+| Layer           | Technology                                        |
+| --------------- | ------------------------------------------------- |
+| Runtime         | Bun 1.x + TypeScript                              |
+| API server      | Fastify                                           |
+| Database        | PostgreSQL via Prisma (Neon serverless supported) |
+| Containers      | Docker CLI                                        |
+| Proxy           | Nginx upstream config management                  |
+| Process manager | PM2 (recommended)                                 |
+| Dashboard       | React / Vite (static build, served by Fastify)    |
+
 
 ---
 
@@ -112,3 +114,4 @@ Self-hosted instances use a **fixed callback** on the public relay: register **C
 
 - [Setup & API](docs/SETUP.md) — detailed setup, environment variables, full API reference
 - [Architecture](docs/ARCHITECTURE.md) — deployment pipeline, blue-green state diagrams, rollback flow, crash recovery
+
