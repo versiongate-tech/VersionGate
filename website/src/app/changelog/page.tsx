@@ -44,9 +44,39 @@ interface ProcessedRelease {
 
 const FALLBACK_RELEASES: ProcessedRelease[] = [
   {
+    version: "v2.3.1",
+    date: "September 5, 2026",
+    isLatest: true,
+    summary:
+      "Landing page, README, and capability grid rewritten against src/ — single-container scope stated up front, fictional versiongate CLI and dashboard-only cards removed, job log format aligned with deploy.handler.ts.",
+    categories: [
+      {
+        title: "Documentation & Marketing Accuracy",
+        badge: "IMPROVEMENT",
+        items: [
+          {
+            title: "README and landing page scope correction",
+            description:
+              "Documents one Docker container per project per environment, no docker-compose, and auto-Dockerfile detection list (package.json, requirements.txt, go.mod, index.html).",
+          },
+          {
+            title: "Capability grid engine-only entries",
+            description:
+              "Removed dashboard UI remodel cards; API routes and host scripts replace fictional versiongate CLI commands.",
+          },
+          {
+            title: "Simulator and Q&A source-aligned snippets",
+            description:
+              "Job log lines match deploy.handler.ts and rollback.handler.ts; Q&A code excerpts reference traffic.service.ts, docker.ts, and auth routes.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     version: "v2.3.0",
     date: "August 20, 2026",
-    isLatest: true,
+    isLatest: false,
     summary: "Complete Vercel platform structural and layout overhaul featuring top scope bar with workspace switcher, horizontal sub-header navigation bar, 4-column telemetry hero matrix, and Grid vs Dense Table view modes.",
     categories: [
       {
@@ -275,7 +305,7 @@ const FALLBACK_RELEASES: ProcessedRelease[] = [
   {
     version: "v1.6.0",
     date: "August 10, 2026",
-    isLatest: true,
+    isLatest: false,
     summary: "Signal-black marketing landing with acid-mint accent, mono manifesto typography, and kinetic slot-orbit hero.",
     categories: [
       {

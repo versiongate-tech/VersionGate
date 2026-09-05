@@ -82,7 +82,7 @@ export function HeroDeployVisual() {
 
           <div className="absolute bottom-[12%] left-1/2 w-[70%] -translate-x-1/2 border border-white/10 bg-black/60 px-4 py-3 font-mono text-[11px] text-white/55 backdrop-blur-sm">
             <span className="text-[#3effa8]">[ LIVE ]</span>
-            <span className="ml-3">upstream → GREEN · slot BLUE warm · downtime 0 ms</span>
+            <span className="ml-3">upstream → GREEN · BLUE slot idle · production env</span>
           </div>
         </div>
       </div>

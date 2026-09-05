@@ -7,29 +7,29 @@ export function TopologyVisualizer() {
 
   const steps = [
     {
-      title: "01 // Git Webhook Ingress",
-      desc: "GitHub webhook sends a signed POST payload (/api/webhooks/github) verified with HMAC SHA-256.",
-      payload: "X-Hub-Signature-256: sha256=8f92a1c...",
+      title: "01 // Webhook or API trigger",
+      desc: "Git push hits POST /api/v1/webhooks/:secret (branch-matched environments) or POST /api/webhooks/github (GitHub App with X-Hub-Signature-256). Manual deploys use POST /api/v1/deploy with Bearer token or session.",
+      payload: 'enqueueJob("DEPLOY", projectId, {}, environmentId)',
     },
     {
-      title: "02 // Redis Mutex & Lock",
-      desc: "Acquires an atomic distributed lock on project:environment in Redis to prevent concurrent deploy race conditions.",
-      payload: "SET lock:project:web-app:production PX 300000 NX",
+      title: "02 // Deploy lock",
+      desc: "acquireDeployLock() sets a Redis key env:{id} when Redis is available, then updates environments.lockedAt in PostgreSQL. Rejects concurrent deploys for the same environment.",
+      payload: "Redis SET env:{id} NX + UPDATE environments SET lockedAt",
     },
     {
-      title: "03 // Idle Slot Compilation",
-      desc: "Determines idle container slot (GREEN on port 3101), pulls repository code, and builds Docker image.",
-      payload: "docker build -t versiongate-web-app:v14 .",
+      title: "03 // Single-container build",
+      desc: "git.prepareSource(), ensureDockerfile(), docker build one image tag, docker run on idle BLUE or GREEN host port (basePort / basePort+1).",
+      payload: "docker build -t versiongate-{project}:{timestamp} .",
     },
     {
-      title: "04 // Health Verification",
-      desc: "Launches GREEN container on port 3101 and verifies health endpoint (GET http://127.0.0.1:3101/health).",
-      payload: "GET /health -> 200 OK (Latency: 12ms)",
+      title: "04 // Health verification",
+      desc: "ValidationService GETs project.healthPath on http://localhost:{idlePort} with retries. Failure marks deployment FAILED and does not switch traffic.",
+      payload: "GET http://localhost:3101/health → 2xx required",
     },
     {
-      title: "05 // Atomic Nginx Swap",
-      desc: "Generates new Nginx upstream configuration mapping to port 3101 and executes graceful Nginx reload.",
-      payload: "nginx -s reload -> Upstream swapped in 0 ms downtime",
+      title: "05 // Nginx reload",
+      desc: "TrafficService writes upstream config and runs nginx -s reload. Runs only when environment name is production; other stages use /p/:project/:env proxy paths.",
+      payload: "nginx -s reload",
     },
   ];
 
@@ -53,21 +53,17 @@ export function TopologyVisualizer() {
 
       <div className="space-y-4 border border-white/10 bg-black p-6">
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
-          <span className="font-mono text-sm font-bold text-white">
-            {steps[activeStep].title}
-          </span>
+          <span className="font-mono text-sm font-bold text-white">{steps[activeStep].title}</span>
           <span className="font-mono text-[10px] text-white/40">
             Step {activeStep + 1} of {steps.length}
           </span>
         </div>
 
-        <p className="text-xs leading-relaxed text-white/55">
-          {steps[activeStep].desc}
-        </p>
+        <p className="text-xs leading-relaxed text-white/55">{steps[activeStep].desc}</p>
 
         <div className="space-y-1">
           <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
-            System Operation Payload
+            Implementation reference
           </span>
           <pre className="overflow-x-auto border border-white/10 bg-white/[0.03] p-3 font-mono text-xs text-white/80">
             {steps[activeStep].payload}

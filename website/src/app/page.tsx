@@ -16,26 +16,26 @@ const LOOP = [
   {
     step: "01",
     label: "Build",
-    title: "Idle slot compilation",
-    body: "Pull the commit, build on the idle blue or green slot, and keep live traffic on the active upstream.",
+    title: "Idle slot image build",
+    body: "Pull the environment branch, run ensureDockerfile(), docker build one image, docker run on the idle BLUE or GREEN host port.",
   },
   {
     step: "02",
     label: "Prove",
-    title: "Health-gated promotion",
-    body: "Hit the container health endpoint on the isolated host port. No rewrite until the new revision answers clean.",
+    title: "HTTP health check",
+    body: "GET project.healthPath on http://localhost:{idlePort}. Failure aborts the deploy; the active slot keeps serving traffic.",
   },
   {
     step: "03",
     label: "Swap",
-    title: "Atomic Nginx rewrite",
-    body: "Reload upstream mapping in place. Request loss stays at zero while the previous slot stays warm.",
+    title: "Nginx upstream reload",
+    body: "Write upstream config and nginx -s reload for the production environment. Non-production stages use /p/:project/:env proxy routes instead.",
   },
   {
     step: "04",
     label: "Recover",
     title: "Warm-swap rollback",
-    body: "Reuse the cached image on the sibling slot. Rollbacks land in under two seconds without a rebuild.",
+    body: "Re-run the previous deployment's local Docker image tag, validate health, reload Nginx, stop the current container.",
   },
 ] as const;
 
@@ -45,7 +45,7 @@ export default function Home() {
       <div className="border-b border-[#3effa8] bg-[#3effa8]">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6">
           <p className="font-mono text-[11px] font-semibold tracking-[0.08em] text-black">
-            Self-hosted zero-downtime Docker deploys on metal you control
+            Single-container Docker deploys — one image per project environment, blue/green host ports
           </p>
           <Link
             href="/docs/quick-start"
@@ -58,7 +58,6 @@ export default function Home() {
 
       <SiteHeader />
 
-      {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0">
           <HeroDeployVisual />
@@ -72,10 +71,10 @@ export default function Home() {
               VersionGate
             </p>
             <h1 className="mt-8 max-w-lg font-display text-[clamp(1.35rem,2.6vw,1.85rem)] font-medium uppercase leading-[1.15] tracking-[-0.02em] text-white">
-              Zero-downtime deploys that keep a warm slot ready.
+              Blue/green deploys for one container per environment.
             </h1>
             <p className="mt-5 max-w-md text-base leading-relaxed text-white/60">
-              Push to GitHub. VersionGate builds on the idle slot, proves health, then rewrites Nginx — with rollback as a local image swap.
+              Self-hosted engine: git pull, single Dockerfile build, health check on the idle slot, Nginx reload for production, rollback from cached image tags. No docker-compose.
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-3">
               <Link
@@ -97,41 +96,37 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Problem — typographic, long breath */}
       <section className="border-t border-white/10 py-28 sm:py-36">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <p className="landing-eyebrow">The gap</p>
+          <p className="landing-eyebrow">Scope</p>
           <h2 className="landing-headline mt-6 text-[clamp(2rem,5vw,3.4rem)] text-white">
-            Shipping got fast.
+            One container.
             <br />
-            Recovery stayed manual.
+            One Dockerfile.
           </h2>
           <div className="landing-prose mt-10 space-y-6">
             <p>
-              CI/CD solved the push problem. Images land constantly, manifests churn, and every VPS becomes a miniature fleet. What did not improve is the moment after a bad deploy — when traffic is already wrong and the previous revision is a rebuild away.
+              VersionGate deploys a single Docker container per project per environment. Each environment uses two host ports (BLUE at basePort, GREEN at basePort + 1) to run the next revision before switching traffic.
             </p>
             <p>
-              Flat restart scripts treat a CSS tweak like a schema migration. Dashboards fire the same alarm for both, or miss the outage entirely while someone digs for the last known-good tag.
+              There is no docker-compose support in the engine. A project with separate frontend, API, and database services must be packaged into one container (or supply its own Dockerfile that runs what you need in one process tree).
             </p>
             <p className="emphasis">
-              VersionGate is different. It keeps two slots warm, proves the next revision before the rewrite, and makes rollback a local image swap — not a prayer and a rebuild.
+              Auto-generated Dockerfiles detect Node (package.json), Python (requirements.txt), Go (go.mod), or static HTML (index.html) — first match per scanned directory.
             </p>
           </div>
         </div>
       </section>
 
-      {/* Architecture */}
       <section id="architecture-loop" className="border-t border-white/10 py-28 sm:py-36">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="max-w-2xl">
             <p className="landing-eyebrow">Architecture</p>
             <h2 className="landing-headline mt-6 text-[clamp(2rem,4.5vw,3.1rem)] text-white">
-              Four steps.
-              <br />
-              One blue-green loop.
+              Deploy pipeline
             </h2>
             <p className="mt-5 text-base leading-relaxed text-white/55">
-              From idle-slot build to warm-swap recovery — slot isolation, health gates, atomic upstream rewrites.
+              Worker job steps from deploy.handler.ts: source prep, single-image build, health gate, optional Nginx switch, retire previous slot.
             </p>
           </div>
 
@@ -154,94 +149,87 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Deep dive feature strip */}
       <section className="border-t border-white/10 py-28 sm:py-36">
         <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:items-center lg:gap-16">
           <div>
-            <p className="landing-eyebrow">Warm swap</p>
+            <p className="landing-eyebrow">Rollback</p>
             <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              The rollback that already has the image.
+              Re-run the previous image tag.
             </h2>
             <p className="mt-5 text-base leading-relaxed text-white/55">
-              Other tools rebuild to go back. VersionGate keeps the previous slot warm and flips upstream when health says so — usually under two seconds.
+              rollback.handler restores the prior deployment record. When imageExists() finds the tag locally, it skips git pull and docker build before health check and traffic switch.
             </p>
           </div>
           <div className="border border-white/10 bg-[#050505] p-5 sm:p-6">
             <div className="flex items-center justify-between border-b border-white/10 pb-3 font-mono text-[11px]">
-              <span className="text-white/45">rollback stream</span>
-              <span className="text-[#3effa8]">1.48s</span>
+              <span className="text-white/45">rollback job log</span>
+              <span className="text-[#3effa8]">rollback.handler</span>
             </div>
             <div className="mt-4 space-y-2 font-mono text-[12px] leading-relaxed text-white/65">
-              <p>[ INFO ] Rollback → commit 3a1f8b</p>
-              <p>[ OK ] Cache hit versiongate-web-app:v13</p>
-              <p>[ WARN-SWAP ] Skip rebuild</p>
-              <p>[ OK ] Health 200 · 8ms</p>
-              <p className="text-[#3effa8]">[ OK ] Upstream → BLUE · warm-swap complete</p>
+              <p>Rolling back from web-app-production-green (v14) to web-app-production-blue (v13)</p>
+              <p>[WARM-SWAP] Found cached Docker image versiongate-web-app:1710000000000. Spinning up instant container…</p>
+              <p>Validating health at http://localhost:3100/health</p>
+              <p>Switching traffic to port 3100</p>
+              <p className="text-[#3effa8]">Rollback completed: Rolled back from v14 to v13</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Simulator */}
       <section id="sandbox" className="border-t border-white/10 py-28 sm:py-36">
         <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
           <div className="max-w-2xl">
-            <p className="landing-eyebrow">Simulator</p>
+            <p className="landing-eyebrow">Log format</p>
             <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Watch a deploy, rollback, and token flow.
+              Job stream lines from deploy and rollback handlers.
             </h2>
             <p className="mt-5 text-base leading-relaxed text-white/55">
-              Same log grammar and JSON payloads the engine emits in production.
+              Plain-text lines emitted via logEmitter during worker jobs — not pino JSON and not a versiongate CLI.
             </p>
           </div>
           <ExecutionSandbox />
         </div>
       </section>
 
-      {/* Capabilities */}
       <section id="capabilities" className="border-t border-white/10 bg-white/[0.02] py-28 sm:py-36">
         <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
           <div className="max-w-2xl">
             <p className="landing-eyebrow">Capabilities</p>
             <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Engine surface area, command-ready.
+              Engine features verified against src/.
             </h2>
             <p className="mt-5 text-base leading-relaxed text-white/55">
-              Filter by category and copy the CLI that drives each capability.
+              API routes and host scripts only — no fictional versiongate CLI commands.
             </p>
           </div>
           <CapabilityGrid />
         </div>
       </section>
 
-      {/* Pipeline */}
       <section id="architecture" className="border-t border-white/10 py-28 sm:py-36">
         <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
           <div className="max-w-2xl">
             <p className="landing-eyebrow">Pipeline</p>
             <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              From signed webhook to Nginx reload.
+              Webhook to Nginx reload.
             </h2>
             <p className="mt-5 text-base leading-relaxed text-white/55">
-              Trace ingestion through Redis locks, idle-slot builds, health gates, and atomic upstream swaps.
+              Lock, single-container build, validation, and traffic switch as implemented in src/worker/handlers/deploy.handler.ts.
             </p>
           </div>
           <TopologyVisualizer />
         </div>
       </section>
 
-      {/* Install */}
       <section id="install" className="border-t border-white/10 py-28 sm:py-36">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="max-w-2xl">
             <p className="landing-eyebrow">Install</p>
             <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Two files.
-              <br />
-              Zero rewrite.
+              Host bootstrap and CI deploy.
             </h2>
             <p className="mt-5 text-base leading-relaxed text-white/55">
-              Bootstrap one host, then trigger deploys from CI with a Bearer token.
+              install.sh sets up the host. Deploys use POST /api/v1/deploy with projectId (not project name).
             </p>
           </div>
 
@@ -250,7 +238,7 @@ export default function Home() {
               <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
                 <span className="font-mono text-xs text-white/45">install.sh</span>
                 <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#3effa8]">
-                  Step 1 of 2
+                  Step 1
                 </span>
               </div>
               <pre className="mt-4 overflow-x-auto font-mono text-[13px] leading-relaxed text-white/85">
@@ -260,48 +248,45 @@ export default function Home() {
 
             <div className="border border-white/10 bg-[#050505] p-5 sm:p-6">
               <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-                <span className="font-mono text-xs text-white/45">deploy.yml</span>
+                <span className="font-mono text-xs text-white/45">deploy API</span>
                 <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#3effa8]">
-                  Step 2 of 2
+                  Step 2
                 </span>
               </div>
               <pre className="mt-4 overflow-x-auto font-mono text-[13px] leading-relaxed text-white/85">
                 <code>{`curl -X POST "$VG_URL/api/v1/deploy" \\
   -H "Authorization: Bearer $VG_TOKEN" \\
-  -d '{"project":"web-app","env":"production"}'`}</code>
+  -H "Content-Type: application/json" \\
+  -d '{"projectId":"proj_abc","environmentId":"env_prod"}'`}</code>
               </pre>
             </div>
           </div>
         </div>
       </section>
 
-      {/* QnA */}
       <section id="qna" className="border-t border-white/10 bg-white/[0.02] py-28 sm:py-36">
         <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
           <div className="max-w-2xl">
-            <p className="landing-eyebrow">Knowledge base</p>
+            <p className="landing-eyebrow">Reference</p>
             <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Verified answers from the field.
+              Common questions with source-aligned snippets.
             </h2>
             <p className="mt-5 text-base leading-relaxed text-white/55">
-              Troubleshooting threads with concrete snippets for proxy paths, rollbacks, and token scopes.
+              Code excerpts match current src/ implementations — traffic.service.ts, rollback.handler.ts, deploy.handler.ts, docker.ts.
             </p>
           </div>
           <CommunityQnA />
         </div>
       </section>
 
-      {/* Final CTA */}
       <section className="border-t border-white/10 py-28 sm:py-40">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-          <p className="landing-eyebrow">Start small</p>
+          <p className="landing-eyebrow">Get started</p>
           <h2 className="landing-headline mt-6 text-[clamp(1.9rem,4vw,3rem)] text-white">
-            One service.
-            <br />
-            One deploy window.
+            One container per environment.
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-white/55">
-            See what zero downtime feels like when rollback already has the image.
+            Install on a VPS, connect a GitHub repo, deploy a single-service app with blue/green host ports.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <Link

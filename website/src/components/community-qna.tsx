@@ -19,62 +19,78 @@ const THREADS: QuestionThread[] = [
   {
     id: "thread-1",
     category: "Nginx",
-    title: "How does VersionGate switch traffic atomically without dropping active requests?",
+    title: "How does traffic switch without dropping in-flight requests?",
     author: "dinesh_k",
     date: "2 days ago",
     upvotes: 42,
-    question: "When deploying a new version to the green container slot on port 3101, how does VersionGate avoid dropping HTTP requests currently hitting the blue slot on port 3100?",
-    answer: "VersionGate generates an updated Nginx upstream configuration file mapping the project's upstream name to 127.0.0.1:3101. It runs `nginx -s reload` (or SIGHUP), which instructs Nginx to spawn new worker processes for new incoming connections while allowing old worker processes to finish serving existing in-flight connections gracefully.",
+    question:
+      "When a new container is ready on the idle port, how does VersionGate move production traffic without cutting active connections?",
+    answer:
+      "TrafficService.switchTrafficTo() writes a new upstream block pointing at 127.0.0.1:{port} and runs nginx -s reload (with sudo -n fallback). Nginx starts new workers for incoming connections while existing workers finish open requests.",
     accepted: true,
-    codeSnippet: "# Nginx upstream reload execution\nversiongate traffic switch --port 3101 --upstream versiongate_api-backend\n# Reloads Nginx gracefully without closing active socket connections",
+    codeSnippet: `await execFileAsync("nginx", ["-s", "reload"]);`,
   },
   {
     id: "thread-2",
     category: "Rollbacks",
-    title: "Why is the warm-swap rollback under 2 seconds?",
+    title: "Why is rollback faster than a full deploy?",
     author: "alex_dev",
     date: "3 days ago",
     upvotes: 38,
-    question: "When I trigger a rollback to a previous deployment version, why is it so much faster than a fresh deployment?",
-    answer: "VersionGate warm-swap checks if the Docker container or local Docker image tag (e.g. `versiongate-my-app:v13`) already exists on the VPS host. If present, it skips git cloning, dependency installation, and Docker build context compilation, directly executing `docker run` on the cached image and verifying health immediately.",
+    question: "Rollback reuses an older version — what steps does the engine skip?",
+    answer:
+      "When the previous image tag still exists locally, rollback.handler logs [WARM-SWAP] and runs docker run with previous.imageTag instead of git pull and docker build. It still runs ValidationService before switchTrafficTo().",
     accepted: true,
-    codeSnippet: "// Warm-swap check in src/services/rollback.service.ts\nconst isCached = await imageExists(previous.imageTag);\nif (isCached) {\n  await runContainer(previous.containerName, previous.imageTag, ...);\n}",
+    codeSnippet: `const isCached = await imageExists(previous.imageTag);
+if (isCached) {
+  await log(\`[WARM-SWAP] Found cached Docker image \${previous.imageTag}. Spinning up instant container…\`);
+}`,
   },
   {
     id: "thread-3",
     category: "API Tokens",
-    title: "How do I authenticate GitHub Actions to trigger deployments without logging in?",
+    title: "How do I trigger deploys from CI without a dashboard session?",
     author: "devops_sam",
     date: "5 days ago",
     upvotes: 29,
-    question: "I want to trigger VersionGate deployments from a GitHub Actions workflow on PR merge. How do I generate and use API tokens?",
-    answer: "Navigate to Dashboard → Settings → API Access Tokens and click 'Generate Token'. Copy the raw token (`vg_live_...`). In your GitHub repository secrets, add `VERSIONGATE_API_TOKEN`. Pass it in the HTTP header: `Authorization: Bearer vg_live_...`.",
+    question: "What API calls should GitHub Actions use?",
+    answer:
+      "Create a token with POST /api/v1/auth/tokens (dashboard or authenticated session). Pass Authorization: Bearer vg_live_... on POST /api/v1/deploy with projectId and optional environmentId. Response is 202 with jobId.",
     accepted: true,
-    codeSnippet: "# GitHub Actions Step\n- name: Trigger VersionGate Deploy\n  run: |\n    curl -X POST https://your-server.com/api/v1/deploy \\\n      -H \"Authorization: Bearer ${{ secrets.VERSIONGATE_API_TOKEN }}\" \\\n      -d '{\"projectId\":\"proj_123\",\"environmentId\":\"env_prod\"}'",
+    codeSnippet: `curl -X POST "$VG_URL/api/v1/deploy" \\
+  -H "Authorization: Bearer $VG_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"projectId":"proj_abc","environmentId":"env_prod"}'`,
   },
   {
     id: "thread-4",
     category: "Docker",
-    title: "What happens if a newly deployed container crashes on startup?",
+    title: "What happens if the new container fails health checks?",
     author: "marcus_b",
     date: "1 week ago",
     upvotes: 24,
-    question: "If I deploy a broken code change that causes Node/Python to crash-loop on container launch, does VersionGate tear down my working production app?",
-    answer: "No. Live traffic remains 100% connected to the active blue slot container. VersionGate runs an internal health validation check against `http://127.0.0.1:<idle_port><healthPath>`. If the health check fails or times out, the deployment job is marked `FAILED`, the broken green container is stopped and removed, and Nginx traffic is never switched.",
+    question: "Does a failed deploy take production offline?",
+    answer:
+      "No. deploy.handler runs validation.validate() before switchTrafficTo(). On failure it throws DeploymentError, marks the deployment FAILED, and does not reload Nginx. The previously ACTIVE slot keeps serving traffic.",
     accepted: true,
-    codeSnippet: "[ FAIL ] Health check failed: http://127.0.0.1:3101/health returned 500 Internal Server Error\n[ INFO ] Deployment aborted. Active traffic remains safely connected to port 3100.",
+    codeSnippet: `if (!health.success) {
+  throw new DeploymentError(health.error ?? "Health check failed");
+}`,
   },
   {
     id: "thread-5",
     category: "Troubleshooting",
-    title: "How to resolve 'port already allocated' errors on manual container restarts?",
+    title: "How are host port conflicts handled before docker run?",
     author: "chen_wei",
     date: "1 week ago",
     upvotes: 19,
-    question: "I get a Docker port allocation error when attempting to force restart a container bound to port 3100. How does VersionGate handle port collisions?",
-    answer: "VersionGate includes a `freeHostPort(port)` utility function that queries `docker ps -q --filter publish=PORT` and force-removes any leftover orphan containers occupying that port before attempting to bind new containers.",
+    question: "Orphan containers sometimes hold basePort — what does the engine do?",
+    answer:
+      "freeHostPort() queries docker ps --filter publish={port} and force-removes any container bound to that host port before starting the new slot container.",
     accepted: true,
-    codeSnippet: "await freeHostPort(hostPort);\n// Kills and cleans up any orphaned containers bound to hostPort prior to docker run",
+    codeSnippet: `const { stdout } = await execFileAsync(dockerCmd(), [
+  "ps", "-q", "--filter", \`publish=\${hostPort}\`,
+]);`,
   },
 ];
 
@@ -103,7 +119,6 @@ export function CommunityQnA() {
 
   return (
     <div className="space-y-6">
-      {/* Search & Category Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex flex-wrap items-center gap-2">
           {categories.map((cat) => (
@@ -125,16 +140,15 @@ export function CommunityQnA() {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search Q&A knowledge base..."
+          placeholder="Search topics..."
           className="bg-muted border border-border rounded-md px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/50 sm:w-64"
         />
       </div>
 
-      {/* Threads List */}
       <div className="space-y-4">
         {filtered.length === 0 ? (
           <div className="py-12 text-center font-mono text-xs text-muted-foreground rounded-lg border border-border bg-card">
-            No Q&A threads found matching "{searchQuery}".
+            No topics matching &quot;{searchQuery}&quot;.
           </div>
         ) : (
           filtered.map((thread) => (
@@ -150,19 +164,16 @@ export function CommunityQnA() {
                     </span>
                     {thread.accepted && (
                       <span className="rounded bg-emerald-500/10 px-2 py-0.5 font-mono text-[9px] text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-semibold">
-                        [ ACCEPTED SOLUTION ]
+                        [ SOURCE-ALIGNED ]
                       </span>
                     )}
                   </div>
-                  <h3 className="font-sans text-sm font-bold text-foreground pt-1">
-                    {thread.title}
-                  </h3>
+                  <h3 className="font-sans text-sm font-bold text-foreground pt-1">{thread.title}</h3>
                   <div className="font-mono text-[10px] text-muted-foreground">
                     Asked by <span className="text-foreground">{thread.author}</span> · {thread.date}
                   </div>
                 </div>
 
-                {/* Upvote Button */}
                 <button
                   onClick={() => handleUpvote(thread.id)}
                   className="flex flex-col items-center justify-center rounded-md border border-border bg-muted/60 px-3 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition min-w-[50px]"
@@ -172,19 +183,15 @@ export function CommunityQnA() {
                 </button>
               </div>
 
-              {/* Question Text */}
               <div className="font-sans text-xs text-muted-foreground leading-relaxed border-l-2 border-border pl-3">
                 {thread.question}
               </div>
 
-              {/* Solution Answer Box */}
               <div className="rounded-md bg-muted border border-border p-4 space-y-3">
                 <div className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">
-                  Verified Engine Solution:
+                  Answer:
                 </div>
-                <p className="font-sans text-xs text-foreground leading-relaxed">
-                  {thread.answer}
-                </p>
+                <p className="font-sans text-xs text-foreground leading-relaxed">{thread.answer}</p>
                 {thread.codeSnippet && (
                   <pre className="overflow-x-auto p-3 bg-background border border-border font-mono text-xs text-foreground rounded-md">
                     {thread.codeSnippet}

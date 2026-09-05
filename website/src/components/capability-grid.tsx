@@ -14,148 +14,158 @@ export interface Capability {
 
 const CAPABILITIES: Capability[] = [
   {
-    id: "cap-bluegreen",
+    id: "cap-singlecontainer",
     category: "Deployment",
-    title: "Blue-Green Zero Downtime",
-    command: "versiongate deploy --project web-app --env production",
-    description: "Atomic idle slot container compilation and Nginx upstream reload with zero HTTP request loss.",
-    details: "Builds a fresh container on an isolated host port, executes endpoint health checks, and rewrites Nginx upstream configuration atomically.",
+    title: "Single-Container Deploys",
+    command: 'POST /api/v1/deploy  {"projectId":"...","environmentId":"..."}',
+    description:
+      "One build context, one Dockerfile, one running container per project environment on a BLUE/GREEN port pair.",
+    details:
+      "No docker-compose or multi-service stacks. deploy.handler builds a single image (versiongate-{project}:{timestamp}), runs it on basePort or basePort+1, and retires the previous slot after activation.",
     badge: "Core Engine",
   },
   {
-    id: "cap-structuraloverhaul",
+    id: "cap-bluegreen",
     category: "Deployment",
-    title: "Vercel Platform Structural Overhaul",
-    command: "versiongate ui overhaul --layout vercel-platform",
-    description: "Complete structural overhaul featuring top scope bar, horizontal sub-nav, 4-column telemetry hero matrix, and grid/table view modes.",
-    details: "Restructures top navigation header, project matrix grids, dense data tables, and project detail workspace for modern cloud operations.",
-    badge: "v2.3 Feature",
+    title: "Blue-Green Slot Deployment",
+    command: 'POST /api/v1/deploy  {"projectId":"...","environmentId":"..."}',
+    description:
+      "Deploy to the idle BLUE or GREEN host port, health-check the new container, then reload Nginx upstream for production.",
+    details:
+      "Color alternates from the active deployment record. TrafficService.switchTrafficTo() writes upstream config and runs nginx -s reload. Nginx switch is skipped when environment name is not production (DEFAULT_ENVIRONMENT_NAME).",
+    badge: "Core Engine",
   },
   {
     id: "cap-warmswap",
     category: "Deployment",
-    title: "Instant Warm-Swap Rollback",
-    command: "versiongate rollback --project web-app --env production",
-    description: "Sub-second rollbacks reusing locally cached Docker image tags without git re-pulling or context rebuilds.",
-    details: "Inspects host Docker cache for previous container state and switches traffic instantly, reducing rollback time from minutes to < 2 seconds.",
-    badge: "v1.4 Feature",
+    title: "Warm-Swap Rollback",
+    command: "POST /api/v1/projects/:id/rollback",
+    description:
+      "Restores the previous deployment record by re-running its Docker image tag when the image exists locally.",
+    details:
+      "rollback.handler calls imageExists(previous.imageTag). When cached, it skips git clone and docker build, runs the previous container, validates health, then switchTrafficTo(previous.port). Requires a prior successful deployment record.",
+    badge: "Engine",
   },
   {
     id: "cap-stageproxy",
     category: "Networking",
     title: "Stage Path Reverse Proxy",
-    command: "versiongate proxy add --path /p/web-app/staging",
-    description: "Reverse proxies stage environments cleanly on /p/:projectName/:stage without exposing raw host ports.",
-    details: "Dynamic Nginx location blocks parse incoming request URI paths and forward traffic directly to internal Docker container ports.",
-    badge: "v1.4 Feature",
+    command: "GET /p/:projectName/:envName/*",
+    description:
+      "Routes /p/{project}/{environment}/... to the active container port via Fastify proxy handlers.",
+    details:
+      "ProxyService.resolveTarget() looks up the ACTIVE deployment port. HTML responses rewrite asset paths for Next.js, Vite, and /static/ prefixes. Separate from the Nginx upstream used for production traffic.",
+    badge: "Engine",
   },
   {
     id: "cap-bearerauth",
     category: "Security",
     title: "Bearer API Access Tokens",
-    command: "versiongate tokens create --name 'GitHub Actions CI'",
-    description: "SHA-256 hashed persistent vg_live_... API Bearer tokens for external CI/CD workflow automation.",
-    details: "Enables programmatic deployment triggers from GitHub Actions, GitLab CI, or custom webhooks without session cookies.",
-    badge: "v1.4 Feature",
+    command: "POST /api/v1/auth/tokens  {\"name\":\"CI deploy\"}",
+    description:
+      "Issues vg_live_... tokens; stores SHA-256 hash in PostgreSQL for Authorization: Bearer on API routes.",
+    details:
+      "createApiToken() in auth.service.ts returns the raw token once. requireApiAuth middleware accepts session cookies or Bearer tokens via getUserFromApiToken().",
+    badge: "Engine",
   },
   {
     id: "cap-passwordreset",
     category: "Security",
-    title: "CLI & Dashboard Password Management",
+    title: "Password Reset Scripts",
     command: "bun run reset-password admin@example.com 'NewPass123!'",
-    description: "Self-hosted CLI password reset tools and in-dashboard administrator password management.",
-    details: "Enables host-level password resets via `bun run reset-password` or `bun run create-admin --reset`, and in-dashboard password updates under Settings -> Security.",
-    badge: "v2.1 Feature",
-  },
-  {
-    id: "cap-vercelremodel",
-    category: "Monitoring",
-    title: "Vercel Geist Obsidian Visual Remodel",
-    command: "versiongate theme set --preset vercel-geist",
-    description: "Full platform aesthetic redesign featuring Geist typography, #000000 obsidian dark canvas, hairline cards, and solid white CTAs.",
-    details: "Overhauls entire dashboard, navigation bar, and login cards with Geist Sans/Mono typography, backdrop-blur sticky headers, and rounded-xl hairline panels.",
-    badge: "v2.2 Feature",
+    description:
+      "Host CLI scripts and dashboard password change for administrator credentials.",
+    details:
+      "scripts/reset-password.ts and scripts/create-admin.ts (--reset) update scrypt-hashed passwords in PostgreSQL. Logged-in users can POST /api/v1/auth/password from the dashboard.",
+    badge: "Host / Dashboard",
   },
   {
     id: "cap-autohealing",
     category: "Monitoring",
-    title: "In-Process Worker & Base Href Proxy",
-    command: "versiongate worker start --auto-heal",
-    description: "Embedded worker for Docker/single-process installs; PM2 splits API and worker with explicit queue ownership.",
-    details: "Runs a background worker inside the API when IN_PROCESS_WORKER=true (Docker default). PM2 production sets IN_PROCESS_WORKER=false on the API and uses a dedicated worker process. Job claims use PostgreSQL SKIP LOCKED row locks.",
-    badge: "v1.5 Feature",
+    title: "Job Worker & Deploy Locks",
+    command: "IN_PROCESS_WORKER=true  (default in Docker)",
+    description:
+      "PostgreSQL job queue with SKIP LOCKED claims; optional in-process worker or separate PM2 worker.",
+    details:
+      "claimNextJob() uses FOR UPDATE SKIP LOCKED. acquireDeployLock() uses Redis (when available) plus a PostgreSQL lockedAt row. worker/in-process.ts polls when IN_PROCESS_WORKER=true.",
+    badge: "Engine",
   },
   {
     id: "cap-healthmonitor",
     category: "Monitoring",
-    title: "Native Background Health Audit",
-    command: "versiongate monitor status",
-    description: "Continuous background thread auditing DB connection latency, Redis locks, container states, and disk/RAM limits.",
-    details: "Runs an internal 30-second audit loop inspecting system thresholds and exposing real-time engine health telemetry.",
-    badge: "v1.4 Feature",
+    title: "Background Health Monitor",
+    command: "GET /api/v1/system/engine-health",
+    description:
+      "30-second interval audit of database latency, Redis availability, container inspect state, and host CPU/RAM/disk.",
+    details:
+      "EngineHealthMonitorService.tick() in engine-monitor.service.ts. Returns status ok | degraded | error with alert list. Started from server.ts on boot.",
+    badge: "Engine",
   },
   {
     id: "cap-envoverrides",
     category: "Security",
     title: "Per-Environment Variable Overrides",
-    command: "versiongate env set --env staging --key DB_HOST --val staging-db",
-    description: "Stage-specific environment variables for dev, staging, and prod overriding global project environment defaults.",
-    details: "Merged into container runtime environment at launch: { ...parseProjectEnv(project.env), ...parseProjectEnv(stage.env) }.",
-    badge: "v1.4 Feature",
+    command: "PATCH /api/v1/projects/:id/environments/:envId",
+    description:
+      "Stage-specific env vars merged over project-level defaults at container start.",
+    details:
+      "deploy.handler merges decryptProjectEnv(project.env) with decryptProjectEnv(environment.env) before runContainer(). Stage keys override project keys with the same name.",
+    badge: "Engine",
   },
   {
     id: "cap-githubrelay",
     category: "Security",
-    title: "GitHub App Relay & Custom Manifests",
-    command: "versiongate github mode --type relay",
-    description: "Dual GitHub integration supporting zero-config central cloud relay or 1-click custom GitHub App Manifest creation.",
-    details: "Central relay fans out push webhooks securely with HMAC SHA-256 signatures; Custom Manifest mode builds self-hosted apps in 1-click.",
-    badge: "v1.4 Feature",
+    title: "GitHub App & Central Relay",
+    command: "POST /api/webhooks/github  (GitHub App)",
+    description:
+      "GitHub App webhooks verified with X-Hub-Signature-256; optional versiongate.tech relay with X-VG-Relay-Signature.",
+    details:
+      "github-app.controller.ts verifies HMAC on /api/webhooks/github and relay hop on /api/webhooks/github/relay. Per-project webhooks use POST /api/v1/webhooks/:secret (secret in URL, no HMAC).",
+    badge: "Engine",
   },
   {
     id: "cap-multibranch",
     category: "Deployment",
-    title: "Multi-Stage Git Webhook Auto-Deploy",
-    command: "versiongate webhook test --branch staging",
-    description: "Automatic multi-stage deployments targeting staging, dev, and production based on Git push ref.",
-    details: "Parses Git push branches and simultaneously triggers automated builds for all environment stages tracking that branch.",
-    badge: "v1.8 Feature",
+    title: "Branch-Matched Webhook Deploys",
+    command: "POST /api/v1/webhooks/:secret  (push event)",
+    description:
+      "Git push enqueues DEPLOY jobs for each environment whose branch matches the pushed ref.",
+    details:
+      "webhook.controller.ts parses refs/heads/{branch} and filters environments by branch. Does not deploy every stage unless each stage's branch matches the push. Ignores non-push GitHub events.",
+    badge: "Engine",
   },
   {
-    id: "cap-bunbuild",
+    id: "cap-dockerfile",
     category: "Deployment",
-    title: "Bun Text Lockfile & Multi-Runtime Dockerfiles",
-    command: "versiongate build --detect",
-    description: "Native Dockerfile generation supporting modern text bun.lock, bun.lockb, go.mod without go.sum, and Node package-lock.",
-    details: "Introspects project structure to synthesize lightweight Alpine Docker containers with optimized caching layers across Bun, Node, Go, and Python.",
-    badge: "v1.8 Feature",
+    title: "Auto Dockerfile Generation",
+    command: "ensureDockerfile()  (on each deploy)",
+    description:
+      "Generates a Dockerfile when none exists; respects user-provided Dockerfiles without the auto-generated marker.",
+    details:
+      "Detection order per directory: package.json (Node — npm/yarn/pnpm/bun via lockfiles), requirements.txt (Python), go.mod (Go), index.html (static nginx). Scans build context, repo root, then immediate subdirs; first match wins.",
+    badge: "Engine",
   },
   {
     id: "cap-asyncupdate",
     category: "Deployment",
-    title: "Non-Blocking Async Engine Self-Update",
-    command: "versiongate system update --async",
-    description: "Background self-update pipeline streaming live build logs with zero connection drops and graceful PM2 / standalone reload.",
-    details: "Executes git merge, bun install, drizzle schema sync, and dashboard build in the background with GET /api/v1/system/update/progress streaming.",
-    badge: "v1.9 Feature",
-  },
-  {
-    id: "cap-uiredesign",
-    category: "Monitoring",
-    title: "Zero-Flicker Dashboard & Smart Scroll",
-    command: "versiongate dashboard status",
-    description: "SWR-style silent data revalidation, clean slot metrics, and intelligent terminal scroll locking without layout shifts.",
-    details: "Eliminates skeleton loader flickering during polling and locks log scrolling so active inspections are never interrupted.",
-    badge: "v1.9 Feature",
+    title: "Engine Self-Update",
+    command: "POST /api/v1/settings/self-update/apply",
+    description:
+      "Background git pull, bun install, Drizzle schema sync, and dashboard build with progress polling.",
+    details:
+      "self-update.service.ts runs steps asynchronously. GET /api/v1/system/update/progress streams status. PM2 reload via ecosystem.config.cjs when complete.",
+    badge: "Engine",
   },
   {
     id: "cap-certbotauto",
     category: "Security",
-    title: "Automated Host Certbot & TLS Provisioning",
-    command: "curl -fsSL https://versiongate.tech/install.sh | sudo bash",
-    description: "1-command host installer pre-packages Certbot and python3-certbot-nginx for instant 1-click HTTPS in Settings.",
-    details: "Installs Certbot dependencies out-of-the-box, verifies PATH resolution across /usr/bin/certbot and /snap/bin/certbot, and provides non-blocking SSL fallback diagnostics.",
-    badge: "v2.0 Feature",
+    title: "Certbot TLS from Settings",
+    command: "POST /api/v1/settings/ssl/certbot  {\"domain\":\"...\"}",
+    description:
+      "Host installer includes certbot packages; dashboard triggers certbot --nginx with resolved binary path.",
+    details:
+      "certbot-path.ts checks /usr/bin/certbot, /snap/bin/certbot, and other paths. settings.controller postCertbotSslHandler falls back to sudo -n when needed.",
+    badge: "Host / Dashboard",
   },
 ];
 
@@ -166,9 +176,10 @@ export function CapabilityGrid() {
 
   const categories = ["All", "Deployment", "Networking", "Security", "Monitoring"];
 
-  const filtered = selectedCategory === "All"
-    ? CAPABILITIES
-    : CAPABILITIES.filter((c) => c.category === selectedCategory);
+  const filtered =
+    selectedCategory === "All"
+      ? CAPABILITIES
+      : CAPABILITIES.filter((c) => c.category === selectedCategory);
 
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -215,9 +226,7 @@ export function CapabilityGrid() {
                 {cap.title}
               </h3>
 
-              <p className="text-xs leading-relaxed text-white/50">
-                {cap.description}
-              </p>
+              <p className="text-xs leading-relaxed text-white/50">{cap.description}</p>
 
               <div className="relative mt-3 overflow-x-auto border border-white/10 bg-white/[0.03] p-3 font-mono text-xs text-white/80">
                 <code>{cap.command}</code>
@@ -229,13 +238,13 @@ export function CapabilityGrid() {
                 onClick={() => handleCopy(cap.id, cap.command)}
                 className="text-white/45 transition hover:text-white"
               >
-                {copiedId === cap.id ? "[ Copied ]" : "[ Copy Command ]"}
+                {copiedId === cap.id ? "[ Copied ]" : "[ Copy ]"}
               </button>
               <button
                 onClick={() => setActiveModalCap(cap)}
                 className="font-semibold text-[#3effa8] hover:underline"
               >
-                [ Inspect Spec ]
+                [ Details ]
               </button>
             </div>
           </div>
@@ -262,16 +271,14 @@ export function CapabilityGrid() {
               </button>
             </div>
 
-            <p className="text-xs leading-relaxed text-white/55">
-              {activeModalCap.details}
-            </p>
+            <p className="text-xs leading-relaxed text-white/55">{activeModalCap.details}</p>
 
             <div className="space-y-1">
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
-                CLI Command Execution
+                API / script reference
               </span>
               <div className="border border-white/10 bg-white/[0.03] p-3 font-mono text-xs text-white/80">
-                $ {activeModalCap.command}
+                {activeModalCap.command}
               </div>
             </div>
 
@@ -283,7 +290,7 @@ export function CapabilityGrid() {
                 }}
                 className="bg-[#3effa8] px-4 py-2 text-xs font-semibold text-black transition hover:brightness-110"
               >
-                Copy Command
+                Copy
               </button>
             </div>
           </div>

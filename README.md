@@ -1,46 +1,45 @@
 # VersionGate
 
-> **Self-hosted zero-downtime Docker deployment engine.** Push code to GitHub -> VersionGate builds your Docker container, validates endpoint health on an isolated slot, atomically switches Nginx traffic, and tears down the legacy slot with 0 ms downtime.
+Self-hosted deployment engine for **one Docker container per project per environment**. Each deploy uses a single build context, a single Dockerfile, and runs on a BLUE/GREEN host port pair (`basePort` / `basePort + 1`). There is no docker-compose or multi-service orchestration.
+
+Push to GitHub (or call the API), VersionGate builds the container on the idle slot, runs HTTP health checks, reloads Nginx upstream for production, and can roll back by re-running a previously built image tag.
 
 ---
 
-## Quick 1-Command Host Installer (Ubuntu / Debian / RHEL)
-
-Install VersionGate end-to-end on a fresh or existing VM (installs Docker, Nginx, Node 20, Bun, PM2, configures Nginx reverse proxy, PM2 systemd boot persistence, and starts VersionGate):
+## Quick install (Ubuntu / Debian / RHEL)
 
 ```bash
 curl -fsSL https://versiongate.tech/install.sh | sudo bash
 ```
 
-### With Custom Domain & Automatic TLS (Certbot)
-If you have a domain pointing to your VM's public IP:
+With a domain and automatic TLS:
 
 ```bash
 DOMAIN=versiongate.tech curl -fsSL https://versiongate.tech/install.sh | sudo bash
 ```
 
-Once installed, open your browser directly to complete the 1-minute setup wizard:
-- **HTTP**: `http://your-server-ip/`
-- **HTTPS (if DOMAIN set)**: `https://your-domain.com/`
+Open the setup wizard at `http://your-server-ip/` or `https://your-domain/` when `DOMAIN` is set.
 
-> **Azure VM Users**: Azure enforces Cloud Network Security Groups (NSGs) outside the OS firewall. Ensure inbound ports `80`, `443`, and `9090` (TCP) are allowed in `Azure Portal -> VM -> Networking -> Inbound port rules`, or run `az network nsg rule create --resource-group <RG> --nsg-name <NSG> --name Allow-VersionGate-Inbound --priority 1010 --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 80 443 9090`.
+> **Azure VM:** Allow inbound TCP ports `80`, `443`, and `9090` in the VM NSG if the dashboard/API must be reachable from outside.
 
 ---
 
-## Core Engine Capabilities
+## Core capabilities
 
-- **Zero-Downtime Blue/Green Swaps**: Every deploy targets an isolated idle slot (`:3100` / `:3101`). Live traffic switches atomically via Nginx upstream reload only after health check passes (`200 OK`).
-- **Nginx Reverse Proxy Automation**: Nginx runs in front of the engine, proxying port 80/443 traffic directly to `127.0.0.1:9090` with full WebSocket header support.
-- **PM2 Systemd Boot Persistence**: Auto-generates and enables `pm2-$USER` systemd services to ensure VersionGate automatically restarts across server reboots.
-- **Instant Warm-Swap Rollbacks (< 2s)**: Sub-second rollbacks reusing locally cached Docker image tags without git re-pulling or context rebuilds.
-- **Stage Path Reverse Proxy**: Exposes dev, staging, and production environments over clean path URLs (`/p/:projectName/:stage`) routed dynamically through Nginx without raw ports.
-- **Bearer API Access Tokens**: Generates persistent `vg_live_...` SHA-256 hashed API Bearer tokens for GitHub Actions, GitLab CI, and external automation scripts.
-- **Per-Environment Variable Overrides**: Configure stage-specific environment variables for development, staging, and production that seamlessly override global project defaults.
-- **Native Engine Background Monitor**: Continuous background thread inspecting PostgreSQL DB latency, Redis pub/sub state, container lifecycles, and system CPU/RAM/Disk limits.
-- **Signed GitHub Webhooks**: HMAC SHA-256 signature verification triggering automated deployments on git push.
+- **Single-container blue/green deploys** — one Docker image and one container per environment; idle slot on `basePort` or `basePort + 1`.
+- **Health-gated traffic switch** — HTTP GET on `project.healthPath` before Nginx reload; failed deploys stop the new container and leave the active slot serving traffic.
+- **Nginx upstream reload** — `nginx -s reload` after writing upstream config; production environment only (`name === "production"`).
+- **Warm-swap rollback** — reuses a local Docker image tag when present; skips git pull and rebuild when starting the previous container record.
+- **Stage path proxy** — Fastify routes `/p/:projectName/:envName/*` to the active container port for non-production access without exposing host ports.
+- **Bearer API tokens** — `vg_live_...` tokens stored as SHA-256 hashes; `Authorization: Bearer` on `/api/v1/*`.
+- **Per-environment env overrides** — `{ ...projectEnv, ...stageEnv }` merged at container start.
+- **GitHub integration** — per-project webhook URL (`/api/v1/webhooks/:secret`) or GitHub App with HMAC verification (`/api/webhooks/github`) and optional central relay.
+- **Background health monitor** — 30s interval: PostgreSQL latency, Redis availability, container inspect, CPU/RAM/disk (`GET /api/v1/system/engine-health`).
+- **Auto Dockerfile generation** — detects, in order: `package.json` (Node), `requirements.txt` (Python), `go.mod` (Go), `index.html` (static nginx); first match per scanned directory.
+- **Job worker** — PostgreSQL `SKIP LOCKED` job claims; optional in-process worker (`IN_PROCESS_WORKER=true`) or separate PM2 worker process.
 
 ---
 
 ## License
 
-Distributed under the **MIT License**. Created by **Dinesh Korukonda**.
+MIT License. Created by Dinesh Korukonda.

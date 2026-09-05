@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export interface SearchItem {
   id: string;
-  category: "Command" | "Documentation" | "API Route" | "Architecture";
+  category: "API Route" | "Documentation" | "Architecture" | "Host Script";
   title: string;
   description: string;
   href: string;
@@ -15,64 +14,72 @@ export interface SearchItem {
 
 const SEARCH_ITEMS: SearchItem[] = [
   {
-    id: "cmd-deploy",
-    category: "Command",
-    title: "versiongate deploy",
-    description: "Triggers a zero-downtime blue/green deployment for a project environment",
-    href: "/docs/quick-start",
-    snippet: "versiongate deploy --project api-backend --env production",
+    id: "api-deploy",
+    category: "API Route",
+    title: "POST /api/v1/deploy",
+    description: "Enqueue a blue/green deploy job for a projectId and environmentId",
+    href: "/docs/api-reference",
+    snippet: '{"projectId":"proj_abc","environmentId":"env_prod"}',
   },
   {
-    id: "cmd-rollback",
-    category: "Command",
-    title: "versiongate rollback",
-    description: "Performs instant zero-wait warm-swap rollback using local Docker images",
-    href: "/docs/quick-start",
-    snippet: "versiongate rollback --project api-backend --env production",
+    id: "api-rollback",
+    category: "API Route",
+    title: "POST /api/v1/projects/:id/rollback",
+    description: "Enqueue rollback to the previous deployment record for an environment",
+    href: "/docs/api-reference",
+    snippet: "Authorization: Bearer vg_live_...",
   },
   {
-    id: "cmd-proxy",
-    category: "Command",
-    title: "versiongate proxy list",
-    description: "Lists active Nginx stage path proxy routes for all project environments",
+    id: "api-proxy",
+    category: "API Route",
+    title: "GET /p/:projectName/:envName/*",
+    description: "Stage path proxy to the active container port (Fastify, not Nginx location blocks)",
     href: "/docs/networking",
-    snippet: "/p/:projectName/:envName",
+    snippet: "/p/my-app/staging/api/health",
   },
   {
     id: "api-tokens",
     category: "API Route",
     title: "POST /api/v1/auth/tokens",
-    description: "Generates a persistent vg_live_... Bearer token for CI/CD pipelines",
+    description: "Create a vg_live_... Bearer token (SHA-256 hash stored in PostgreSQL)",
     href: "/docs/api-reference",
-    snippet: "Authorization: Bearer vg_live_...",
+    snippet: '{"name":"CI deploy"}',
   },
   {
     id: "api-health",
     category: "API Route",
     title: "GET /api/v1/system/engine-health",
-    description: "Fetches live PostgreSQL connection latency, Redis locks, and system alerts",
+    description: "Background monitor report: DB latency, Redis, containers, CPU/RAM/disk",
     href: "/docs/api-reference",
-    snippet: "GET /api/v1/system/engine-health",
+    snippet: "EngineHealthMonitorService.getLatestReport()",
+  },
+  {
+    id: "script-reset",
+    category: "Host Script",
+    title: "bun run reset-password",
+    description: "Reset administrator password on the host via PostgreSQL",
+    href: "/docs/quick-start",
+    snippet: "bun run reset-password admin@example.com 'NewPass123!'",
   },
   {
     id: "doc-arch",
     category: "Architecture",
-    title: "Blue-Green Slot Orchestration",
-    description: "How VersionGate allocates published port slots and atomically reloads Nginx upstreams",
+    title: "Blue-Green Host Ports",
+    description: "basePort (BLUE) and basePort+1 (GREEN) per environment; one container active at a time",
     href: "/docs/architecture",
   },
   {
     id: "doc-networking",
     category: "Documentation",
-    title: "Stage Path Reverse Proxy Configuration",
-    description: "Configuring Nginx path-based routing for dev, staging, and production",
+    title: "Stage Path Proxy",
+    description: "/p/:project/:env routes defined in proxy.routes.ts",
     href: "/docs/networking",
   },
   {
     id: "doc-quickstart",
     category: "Documentation",
-    title: "5-Minute VPS Bootstrap Guide",
-    description: "Complete guide to bootstrapping Docker, PostgreSQL, Redis, and VersionGate on Ubuntu/Debian",
+    title: "Host bootstrap",
+    description: "install.sh, PostgreSQL, Redis, Docker, and first project setup",
     href: "/docs/quick-start",
   },
 ];
@@ -98,14 +105,15 @@ export function CommandSearchModal({ isOpen, onClose }: { isOpen: boolean; onClo
 
   if (!isOpen) return null;
 
-  const filtered = query.trim() === ""
-    ? SEARCH_ITEMS
-    : SEARCH_ITEMS.filter(
-        (item) =>
-          item.title.toLowerCase().includes(query.toLowerCase()) ||
-          item.description.toLowerCase().includes(query.toLowerCase()) ||
-          item.category.toLowerCase().includes(query.toLowerCase())
-      );
+  const filtered =
+    query.trim() === ""
+      ? SEARCH_ITEMS
+      : SEARCH_ITEMS.filter(
+          (item) =>
+            item.title.toLowerCase().includes(query.toLowerCase()) ||
+            item.description.toLowerCase().includes(query.toLowerCase()) ||
+            item.category.toLowerCase().includes(query.toLowerCase())
+        );
 
   const handleSelect = (href: string) => {
     onClose();
@@ -114,11 +122,7 @@ export function CommandSearchModal({ isOpen, onClose }: { isOpen: boolean; onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
-      <div
-        className="fixed inset-0"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
 
       <div className="relative w-full max-w-2xl rounded border border-zinc-700 bg-zinc-950 shadow-2xl overflow-hidden z-10">
         <div className="flex items-center border-b border-zinc-800 px-4 py-3 bg-black">
@@ -128,7 +132,7 @@ export function CommandSearchModal({ isOpen, onClose }: { isOpen: boolean; onClo
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search commands, API endpoints, or architecture docs..."
+            placeholder="Search API routes, docs, or host scripts..."
             className="w-full bg-transparent font-mono text-xs text-white placeholder-zinc-500 focus:outline-none"
           />
           <button
@@ -142,7 +146,7 @@ export function CommandSearchModal({ isOpen, onClose }: { isOpen: boolean; onClo
         <div className="max-h-[380px] overflow-y-auto p-2 space-y-1 divide-y divide-zinc-900">
           {filtered.length === 0 ? (
             <div className="py-8 text-center font-mono text-xs text-zinc-500">
-              No matching commands or documentation found for "{query}".
+              No matches for &quot;{query}&quot;.
             </div>
           ) : (
             filtered.map((item) => (
@@ -176,8 +180,8 @@ export function CommandSearchModal({ isOpen, onClose }: { isOpen: boolean; onClo
         </div>
 
         <div className="border-t border-zinc-800 px-4 py-2 bg-black flex items-center justify-between font-mono text-[10px] text-zinc-500">
-          <span>Navigation: Up/Down Arrow or Click</span>
-          <span>Shortcut: ⌘K</span>
+          <span>Navigation: click to open doc</span>
+          <span>Shortcut: Ctrl+K</span>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 {
   "name": "versiongate-engine",
-  "version": "1.0.0",
-  "description": "Lightweight zero-downtime Docker deployment orchestrator",
+  "version": "2.3.1",
+  "description": "Self-hosted single-container Docker deployment engine with blue/green host ports",
   "main": "dist/server.js",
   "scripts": {
     "dev:api": "bun --watch src/server.ts",

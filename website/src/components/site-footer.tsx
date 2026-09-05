@@ -20,7 +20,7 @@ export function SiteFooter() {
             VersionGate
           </p>
           <p className="font-mono text-[11px] text-white/40 [.light_&]:text-muted-foreground">
-            Zero-downtime Docker deploys · © {new Date().getFullYear()} Dinesh Korukonda · MIT
+            Single-container blue/green deploys · © {new Date().getFullYear()} Dinesh Korukonda · MIT
           </p>
         </div>
 

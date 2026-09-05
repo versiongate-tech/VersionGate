@@ -9,63 +9,57 @@ export function ExecutionSandbox() {
 
   const scenarios: Record<Scenario, { title: string; logs: string[]; jsonResponse: object }> = {
     deploy: {
-      title: "Blue/Green Zero-Downtime Deployment",
+      title: "Deploy job log stream",
       logs: [
-        "[ INFO ] Job #4912 enqueued (Project: web-app, Environment: production)",
-        "[ INFO ] Inspecting container slots: BLUE (:3100) ACTIVE | GREEN (:3101) IDLE",
-        "[ INFO ] Building image tag versiongate-web-app:v14 from git commit 8f92a1c...",
-        "[ INFO ] Launching target container slot GREEN on host port 3101",
-        "[ OK ] Health check passed: http://127.0.0.1:3101/health returned 200 OK in 14ms",
-        "[ OK ] Atomically reloaded Nginx upstream config versiongate_web-app -> 127.0.0.1:3101",
-        "[ INFO ] Decommissioned legacy container slot BLUE (:3100)",
-        "[ OK ] Deployment completed with 0 ms downtime.",
+        "Starting deployment pipeline for project web-app (proj_abc), env production (env_prod)",
+        "Step 1: Preparing source code (branch main)",
+        "Step 2: Determining blue/green target",
+        "Target: color=GREEN, hostPort=3101, container=web-app-production-green, image=versiongate-web-app:1710000000000, version=14",
+        "Step 3: Creating DEPLOYING deployment record",
+        "Step 4: Building Docker image",
+        "Step 5: Starting container",
+        "Step 6: Health check http://localhost:3101/health",
+        "Step 7: Switching traffic to port 3101",
+        "Step 8: Activating deployment and retiring previous slot",
+        "Stopping old container: web-app-production-blue",
+        "Deployment successful — web-app-production-green is live on port 3101",
+        "Deploy lock released",
       ],
       jsonResponse: {
-        status: "SUCCESS",
         jobId: "job_4912",
-        project: "web-app",
-        environment: "production",
-        slot: "GREEN",
-        port: 3101,
-        durationMs: 1420,
-        healthCheck: { status: 200, latencyMs: 14 },
+        status: "PENDING",
+        environmentId: "env_prod",
       },
     },
     rollback: {
-      title: "Sub-Second Warm-Swap Rollback",
+      title: "Rollback job log stream",
       logs: [
-        "[ INFO ] Rollback job #4913 initiated -> targeting previous commit 3a1f8b",
-        "[ OK ] Local Docker image cache hit: versiongate-web-app:v13 exists",
-        "[ WARN-SWAP ] Skipping git clone and container build compilation",
-        "[ INFO ] Starting cached container on slot BLUE (:3100)",
-        "[ OK ] Health check passed: http://127.0.0.1:3100/health returned 200 OK in 8ms",
-        "[ OK ] Reloaded Nginx upstream -> 127.0.0.1:3100",
-        "[ OK ] Warm-swap rollback completed in 1.48s.",
+        "Initiating rollback for project web-app (proj_abc), env production (env_prod)",
+        "Rolling back from web-app-production-green (v14) to web-app-production-blue (v13)",
+        "[WARM-SWAP] Found cached Docker image versiongate-web-app:1710000000000. Spinning up instant container…",
+        "Validating health at http://localhost:3100/health",
+        "Switching traffic to port 3100",
+        "Stopping current container: web-app-production-green",
+        "Rollback completed: Rolled back from v14 to v13",
+        "Deploy lock released",
       ],
       jsonResponse: {
-        status: "SUCCESS",
-        jobId: "job_4913",
-        mode: "WARM_SWAP",
-        imageTag: "versiongate-web-app:v13",
-        slot: "BLUE",
-        port: 3100,
-        durationMs: 1480,
+        rolledBackFrom: { version: 14, status: "ROLLED_BACK" },
+        restoredTo: { version: 13, status: "ACTIVE" },
+        message: "Rolled back from v14 to v13",
       },
     },
     tokens: {
-      title: "Bearer Token Generation & Verification",
+      title: "Bearer token flow",
       logs: [
-        "[ REQUEST ] POST /api/v1/auth/tokens (Name: GitHub Actions CI)",
-        "[ INFO ] Generated SHA-256 token hash: vg_live_8f92a1c4b7e6d5a3...",
-        "[ OK ] Token registered successfully with scopes: ['deploy:write', 'project:read']",
-        "[ REQUEST ] POST /api/v1/deploy -H 'Authorization: Bearer vg_live_8f92a1c...'",
-        "[ OK ] Token authenticated successfully for user: dineshkorukonda",
+        "POST /api/v1/auth/tokens — createApiToken() stores SHA-256 hash, returns vg_live_... once",
+        "POST /api/v1/deploy — Authorization: Bearer vg_live_...",
+        "requireApiAuth → getUserFromApiToken() → enqueueJob(DEPLOY)",
       ],
       jsonResponse: {
-        status: "OK",
-        token: "vg_live_8f92a1c4b7e6d5a3...",
-        createdAt: new Date().toISOString(),
-        scopes: ["deploy:write", "project:read"],
+        token: "vg_live_8f92a1c4b7e6d5a3f1e2d4c5b6a798877665544332211009988776655",
+        tokenPrefix: "vg_live_8f92a1...",
+        name: "CI deploy",
       },
     },
   };
@@ -94,7 +88,7 @@ export function ExecutionSandbox() {
         <div className="space-y-3 border border-white/10 bg-black p-4">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <span className="font-mono text-xs font-semibold text-white">{current.title}</span>
-            <span className="font-mono text-[10px] text-white/40">[ Real-time Stream ]</span>
+            <span className="font-mono text-[10px] text-white/40">[ job log lines ]</span>
           </div>
 
           <div className="min-h-[220px] space-y-2 overflow-x-auto border border-white/10 bg-white/[0.03] p-3 font-mono text-xs">
@@ -108,8 +102,8 @@ export function ExecutionSandbox() {
 
         <div className="space-y-3 border border-white/10 bg-black p-4">
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
-            <span className="font-mono text-xs font-semibold text-white">API Telemetry Payload</span>
-            <span className="font-mono text-[10px] text-[#3effa8]">[ 200 OK ]</span>
+            <span className="font-mono text-xs font-semibold text-white">Typical API response</span>
+            <span className="font-mono text-[10px] text-[#3effa8]">[ JSON ]</span>
           </div>
 
           <pre className="min-h-[220px] overflow-x-auto border border-white/10 bg-white/[0.03] p-3 font-mono text-xs text-white/70">
