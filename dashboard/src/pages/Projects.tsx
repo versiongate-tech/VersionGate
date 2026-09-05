@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getAllDeployments, getInstanceSettings, getProjects, listAllJobs, type Deployment, type JobRecord, type Project } from "@/lib/api";
+import { getAllDeployments, getInstanceSettings, getProjects, listAllJobs, listProjectDomains, type Deployment, type JobRecord, type Project } from "@/lib/api";
 import { projectDeploymentStatus } from "@/lib/project-deployment-status";
-import { getActiveDeployment, getDisplayDeployment, guessEnvironmentLabel, publicEnvironmentUrl, setConfiguredPublicHost } from "@/lib/deployment-display";
+import { getActiveDeployment, getDisplayDeployment, guessEnvironmentLabel, publicProjectLiveUrl, setConfiguredPublicHost } from "@/lib/deployment-display";
 import { StatusBadge } from "@/components/badges/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ export function Projects() {
   const launchCreate = useLaunchCreateProject();
   const [projects, setProjects] = useState<Project[]>([]);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [domainsByProject, setDomainsByProject] = useState<Record<string, { hostname: string; sslStatus: string }[]>>({});
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [page, setPage] = useState(0);
@@ -46,6 +47,17 @@ export function Projects() {
       setConfiguredPublicHost(inst?.publicDomain);
       setProjects(p.projects);
       setDeployments(d.deployments);
+      const domainEntries = await Promise.all(
+        p.projects.map(async (proj) => {
+          try {
+            const r = await listProjectDomains(proj.id);
+            return [proj.id, r.domains] as const;
+          } catch {
+            return [proj.id, []] as const;
+          }
+        })
+      );
+      setDomainsByProject(Object.fromEntries(domainEntries));
       const m = new Map<string, string>();
       for (const j of jobs.jobs) {
         if (!m.has(j.projectId)) m.set(j.projectId, j.id);
@@ -178,7 +190,8 @@ export function Projects() {
                 const disp = getDisplayDeployment(proj.id, deployments);
                 const port = disp ? disp.port : proj.basePort;
                 const envLabel = disp ? guessEnvironmentLabel(proj, disp) : "production";
-                const url = publicEnvironmentUrl(proj, envLabel !== "—" ? envLabel : "production", port);
+                const domains = domainsByProject[proj.id] ?? [];
+                const url = publicProjectLiveUrl(proj, domains, port);
                 return (
                   <Link key={proj.id} to={`/projects/${proj.id}`} className="block group">
                     <Card className="h-full border border-neutral-800 bg-[#0a0a0a] rounded-xl shadow-sm transition-all hover:border-neutral-700">
@@ -220,7 +233,8 @@ export function Projects() {
                     const disp = getDisplayDeployment(proj.id, deployments);
                     const port = disp ? disp.port : proj.basePort;
                     const envLabel = disp ? guessEnvironmentLabel(proj, disp) : "production";
-                    const url = publicEnvironmentUrl(proj, envLabel !== "—" ? envLabel : "production", port);
+                    const domains = domainsByProject[proj.id] ?? [];
+                    const url = publicProjectLiveUrl(proj, domains, port);
                     return (
                       <tr key={proj.id} className="transition-colors hover:bg-neutral-900/60">
                         <td className="px-4 py-3 font-semibold text-white">

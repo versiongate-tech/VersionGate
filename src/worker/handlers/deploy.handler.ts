@@ -14,6 +14,7 @@ import { ValidationService } from "../../services/validation.service";
 import { completeJob, failJob } from "../../services/job-queue.service";
 import { humanizeDeployFailure } from "../../utils/deploy-errors";
 import { logEmitter } from "../../events/log-emitter";
+import { syncCustomDomainUpstream } from "../../services/project-domain.service";
 
 const repo = new DeploymentRepository();
 const envRepo = new EnvironmentRepository();
@@ -153,6 +154,7 @@ export async function runDeployJob(
         projectName: project.name,
         environmentName: environment.name,
       });
+      await syncCustomDomainUpstream(project.name, hostPort);
     } else {
       await log(`Step 7: Skipping traffic switch (non-production environment)`);
     }

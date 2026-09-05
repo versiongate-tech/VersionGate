@@ -137,6 +137,28 @@ export function publicEnvironmentUrl(
   return port ? publicServiceUrl(port) : "#";
 }
 
+export interface ProjectDomainLink {
+  hostname: string;
+  sslStatus: string;
+}
+
+/** Prefer custom production hostname when attached; otherwise /p/ path or direct port. */
+export function publicProjectLiveUrl(
+  project: { name: string; basePort: number },
+  domains: ProjectDomainLink[],
+  activePort?: number | null
+): string {
+  const primary = domains.find((d) => d.hostname);
+  if (primary) {
+    const proto = primary.sslStatus === "issued" ? "https" : "http";
+    return `${proto}://${primary.hostname}`;
+  }
+  if (activePort && activePort > 0) {
+    return publicEnvironmentUrl(project, "production", activePort);
+  }
+  return publicStageUrl(project.name, "production");
+}
+
 /** production = project.basePort; staging +200; development +400 (see project.repository). */
 export function guessEnvironmentLabel(project: Project, deployment: Deployment): string {
   const p = deployment.port;

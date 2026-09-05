@@ -92,6 +92,22 @@ if (isCached) {
   "ps", "-q", "--filter", \`publish=\${hostPort}\`,
 ]);`,
   },
+  {
+    id: "thread-6",
+    category: "Troubleshooting",
+    title: "Domain does not open but VersionGate says working",
+    author: "ops_henry",
+    date: "today",
+    upvotes: 12,
+    question:
+      "PM2 is online, PUBLIC_DOMAIN is set, Certbot has a cert, and the dashboard shows Systems Operational. The hostname still fails in the browser. Is the VPS broken?",
+    answer:
+      "Usually no. Preflight DNS runs on the VPS; the laptop resolver can still return NXDOMAIN. curl to the public IP from the guest often hangs (hairpin NAT on Proxmox / shared-to-dedicated port hosts). install.sh, Settings Write nginx, and certbot also write three different files that all listen on port 80. Test loopback with a Host header, compare dig @8.8.8.8 to nslookup on the laptop, and keep server blocks out of upstream.conf. Full runbook: /docs/troubleshooting.",
+    accepted: true,
+    codeSnippet: `curl -sI --max-time 5 -H "Host: $PUBLIC_DOMAIN" http://127.0.0.1/
+dig +short "$PUBLIC_DOMAIN" A @8.8.8.8
+nslookup "$PUBLIC_DOMAIN"`,
+  },
 ];
 
 export function CommunityQnA() {

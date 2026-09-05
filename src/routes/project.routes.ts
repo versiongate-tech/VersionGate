@@ -10,6 +10,12 @@ import {
   generatePipelineHandler,
 } from "../controllers/project.controller";
 import {
+  listProjectDomainsHandler,
+  createProjectDomainHandler,
+  deleteProjectDomainHandler,
+  issueProjectDomainSslHandler,
+} from "../controllers/project-domain.controller";
+import {
   listEnvironmentsHandler,
   updateEnvironmentEnvHandler,
   rollbackEnvironmentHandler,
@@ -236,5 +242,32 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     handler: rollbackEnvironmentHandler,
+  });
+
+  app.get("/projects/:id/domains", {
+    handler: listProjectDomainsHandler,
+  });
+
+  app.post("/projects/:id/domains", {
+    schema: {
+      body: {
+        type: "object",
+        required: ["hostname"],
+        properties: {
+          hostname: { type: "string", minLength: 1 },
+          environmentName: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+    },
+    handler: createProjectDomainHandler,
+  });
+
+  app.delete("/projects/:id/domains/:domainId", {
+    handler: deleteProjectDomainHandler,
+  });
+
+  app.post("/projects/:id/domains/:domainId/ssl", {
+    handler: issueProjectDomainSslHandler,
   });
 }

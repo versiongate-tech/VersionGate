@@ -22,6 +22,8 @@ Open the setup wizard at `http://your-server-ip/` or `https://your-domain/` when
 
 > **Azure VM:** Allow inbound TCP ports `80`, `443`, and `9090` in the VM NSG if the dashboard/API must be reachable from outside.
 
+> **Domain not opening while VersionGate says working:** PM2 online and preflight DNS are measured on the VPS. They do not prove your laptop can resolve the hostname. Do not `curl` the public IP from the VPS (hairpin NAT hangs on Proxmox / NAT hosts). Use [Domain troubleshooting](https://versiongate.tech/docs/troubleshooting).
+
 ---
 
 ## Core capabilities

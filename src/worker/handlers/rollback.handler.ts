@@ -10,6 +10,8 @@ import { DeploymentError, BadRequestError } from "../../utils/errors";
 import { completeJob, failJob } from "../../services/job-queue.service";
 import { humanizeDeployFailure } from "../../utils/deploy-errors";
 import { logEmitter } from "../../events/log-emitter";
+import { DEFAULT_ENVIRONMENT_NAME } from "../../repositories/environment.repository";
+import { syncCustomDomainUpstream } from "../../services/project-domain.service";
 
 const repo = new DeploymentRepository();
 const envRepo = new EnvironmentRepository();
@@ -126,6 +128,9 @@ export async function runRollbackJob(
       projectName: project.name,
       environmentName: environment.name,
     });
+    if (environment.name === DEFAULT_ENVIRONMENT_NAME) {
+      await syncCustomDomainUpstream(project.name, previous.port);
+    }
 
     await log(`Stopping current container: ${current.containerName}`);
     await stopContainer(current.containerName).catch(async (err) => {

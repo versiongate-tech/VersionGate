@@ -76,6 +76,14 @@ const SEARCH_ITEMS: SearchItem[] = [
     href: "/docs/networking",
   },
   {
+    id: "doc-troubleshooting",
+    category: "Documentation",
+    title: "Domain troubleshooting",
+    description: "PM2 online but hostname does not open: DNS split, hairpin NAT, duplicate nginx vhosts",
+    href: "/docs/troubleshooting",
+    snippet: "curl -sI --max-time 5 -H \"Host: YOUR_DOMAIN\" http://127.0.0.1/",
+  },
+  {
     id: "doc-quickstart",
     category: "Documentation",
     title: "Host bootstrap",

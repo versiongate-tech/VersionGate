@@ -187,6 +187,26 @@ export const SPEC_SECTIONS: SpecSection[] = [
         source: "controllers/settings.controller.ts · utils/certbot-path.ts",
         limit: "Domain required (not raw IP). Port 80 reachable.",
       },
+      {
+        id: "project-domain",
+        name: "Project custom domains",
+        summary: "Production hostname per project with isolated nginx files.",
+        mechanism:
+          "project-domain.service writes vg-app-{project}.upstream.conf and per-host server blocks. syncCustomDomainUpstream runs after switchTrafficTo. Certbot uses CERTBOT_EMAIL without modifying PUBLIC_DOMAIN.",
+        api: "GET/POST /api/v1/projects/:id/domains · POST .../domains/:domainId/ssl",
+        source: "services/project-domain.service.ts · utils/nginx-app-domain.ts",
+        limit: "Production only in v1. One hostname per project. Staging domains later.",
+      },
+      {
+        id: "domain-diag",
+        name: "Public domain diagnosis",
+        summary: "Engine healthy is not the same as the hostname opening in a browser.",
+        mechanism:
+          "Layered checks: 127.0.0.1:9090, nginx loopback, Host header, TLS via --resolve, then dig on the VPS vs 8.8.8.8 vs the laptop resolver.",
+        source: "website/src/app/docs/troubleshooting/page.tsx",
+        limit:
+          "Hairpin NAT hangs curl to the public IP from the VPS. NGINX_CONFIG_PATH defaults to upstream.conf. Nested Cloudflare subdomains can NXDOMAIN on some resolvers.",
+      },
     ],
   },
   {

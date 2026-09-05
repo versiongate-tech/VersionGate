@@ -23,6 +23,10 @@ export default function ApiReference() {
           ["POST", "/api/v1/projects/:id/rollback", "Rollback to previous deployment"],
           ["POST", "/api/v1/projects/:id/cancel-deploy", "Cancel in-progress deployment"],
           ["POST", "/api/v1/projects/:id/generate-pipeline", "AI-generate GitHub Actions CI"],
+          ["GET", "/api/v1/projects/:id/domains", "List production custom domains"],
+          ["POST", "/api/v1/projects/:id/domains", "Attach hostname { hostname }"],
+          ["DELETE", "/api/v1/projects/:id/domains/:domainId", "Remove custom domain"],
+          ["POST", "/api/v1/projects/:id/domains/:domainId/ssl", "Issue Certbot TLS for hostname"],
         ]}
       />
 
@@ -85,8 +89,8 @@ export default function ApiReference() {
       </Callout>
 
       <NextLinks
-        primary={{ href: "/docs/quick-start", label: "Quick Start" }}
-        secondary={{ href: "/docs", label: "Introduction" }}
+        primary={{ href: "/docs/troubleshooting", label: "Domain troubleshooting" }}
+        secondary={{ href: "/docs/quick-start", label: "Quick Start" }}
       />
     </article>
   );
