@@ -293,7 +293,7 @@ export function ProjectDetail() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-6 min-w-0">
       <Card className="border-border bg-card">
         <CardHeader>
@@ -373,6 +373,15 @@ export function ProjectDetail() {
         liveHostPort={liveHostPort}
         liveUrl={liveUrl}
         onCopy={copyText}
+      />
+
+      <ProjectCustomDomainCard
+        projectId={project.id}
+        liveUrl={liveUrl}
+        onCopy={copyText}
+        onUpdated={() => {
+          void load(true);
+        }}
       />
 
       <Card className="border-border bg-card">
@@ -548,48 +557,57 @@ export function ProjectDetail() {
         </div>
 
         <aside className="space-y-4">
-          <ProjectCustomDomainCard
-            projectId={project.id}
-            onUpdated={() => {
-              void load(true);
-            }}
-          />
           <Card className="border-border bg-card">
             <CardHeader className="pb-2">
-              <CardTitle className="font-mono text-xs uppercase tracking-wider">Project Resources</CardTitle>
+              <CardTitle className="text-base font-semibold">Project resources</CardTitle>
+              <CardDescription className="text-sm">Quick reference for this deployment.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4 font-mono text-xs">
+            <CardContent className="space-y-5 text-sm">
               <div>
-                <p className="text-[10px] uppercase text-muted-foreground">Live URL</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Live URL</p>
                 {liveUrl ? (
-                  <a href={liveUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-foreground hover:underline">
+                  <a
+                    href={liveUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1.5 block break-all font-mono text-sm text-primary hover:underline"
+                  >
                     {liveUrl.replace(/^https?:\/\//, "")}
                   </a>
                 ) : (
-                  <span className="text-muted-foreground">Not deployed</span>
+                  <span className="mt-1.5 block text-muted-foreground">Not deployed</span>
+                )}
+                {customDomains[0] ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Custom domain attached. Manage in the section above.
+                  </p>
+                ) : (
+                  <a href="#custom-domain" className="mt-2 inline-block text-xs text-primary hover:underline">
+                    Add a custom domain
+                  </a>
                 )}
               </div>
               <div>
-                <p className="text-[10px] uppercase text-muted-foreground">App Port</p>
-                <p className="mt-1 tabular-nums">{project.appPort}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">App port</p>
+                <p className="mt-1.5 font-mono tabular-nums">{project.appPort}</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase text-muted-foreground">Host Ports</p>
-                <p className="mt-1 tabular-nums">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Host ports</p>
+                <p className="mt-1.5 font-mono tabular-nums">
                   {project.basePort}–{project.basePort + 1}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] uppercase text-muted-foreground">Branch</p>
-                <p className="mt-1">{project.branch}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Branch</p>
+                <p className="mt-1.5">{project.branch}</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase text-muted-foreground">Health Path</p>
-                <p className="mt-1">{project.healthPath}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Health path</p>
+                <p className="mt-1.5 font-mono">{project.healthPath}</p>
               </div>
               <div>
-                <p className="text-[10px] uppercase text-muted-foreground">Env Vars</p>
-                <p className="mt-1 text-muted-foreground">•••••••• (encrypted)</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Env vars</p>
+                <p className="mt-1.5 text-muted-foreground">Encrypted at rest</p>
               </div>
             </CardContent>
           </Card>
