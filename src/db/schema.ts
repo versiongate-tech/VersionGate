@@ -26,6 +26,13 @@ export const deploymentColorEnum = pgEnum("DeploymentColor", [
   "GREEN",
 ]);
 
+export const projectDomainSslStatusEnum = pgEnum("ProjectDomainSslStatus", [
+  "pending_dns",
+  "http",
+  "issued",
+  "failed",
+]);
+
 // Users
 export const users = pgTable("User", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -107,6 +114,24 @@ export const projects = pgTable(
     updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
   },
   (table) => [index("Project_name_idx").on(table.name)]
+);
+
+// Custom production hostnames routed to a project's active container
+export const projectDomains = pgTable(
+  "ProjectDomain",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    projectId: text("projectId")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    hostname: text("hostname").notNull().unique(),
+    environmentName: text("environmentName").default("production").notNull(),
+    sslStatus: projectDomainSslStatusEnum("sslStatus").default("pending_dns").notNull(),
+    lastError: text("lastError"),
+    createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [index("ProjectDomain_projectId_idx").on(table.projectId)]
 );
 
 // Environments
@@ -229,6 +254,14 @@ export const githubInstallationsRelations = relations(
 export const projectsRelations = relations(projects, ({ many }) => ({
   environments: many(environments),
   jobs: many(jobs),
+  domains: many(projectDomains),
+}));
+
+export const projectDomainsRelations = relations(projectDomains, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectDomains.projectId],
+    references: [projects.id],
+  }),
 }));
 
 export const environmentsRelations = relations(environments, ({ one, many }) => ({
@@ -274,6 +307,8 @@ export type ApiTokenSelect = typeof apiTokens.$inferSelect;
 export type ApiTokenInsert = typeof apiTokens.$inferInsert;
 export type ProjectSelect = typeof projects.$inferSelect;
 export type ProjectInsert = typeof projects.$inferInsert;
+export type ProjectDomainSelect = typeof projectDomains.$inferSelect;
+export type ProjectDomainInsert = typeof projectDomains.$inferInsert;
 export type EnvironmentSelect = typeof environments.$inferSelect;
 export type EnvironmentInsert = typeof environments.$inferInsert;
 export type JobSelect = typeof jobs.$inferSelect;

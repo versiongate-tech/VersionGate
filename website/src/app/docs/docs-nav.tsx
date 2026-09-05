@@ -9,7 +9,8 @@ const ITEMS = [
   { href: "/docs/architecture", label: "Architecture", num: "03" },
   { href: "/docs/deployment", label: "Deployment", num: "04" },
   { href: "/docs/networking", label: "Networking", num: "05" },
-  { href: "/docs/api-reference", label: "API Reference", num: "06" },
+  { href: "/docs/troubleshooting", label: "Troubleshooting", num: "06" },
+  { href: "/docs/api-reference", label: "API Reference", num: "07" },
 ] as const;
 
 export function DocsNav() {

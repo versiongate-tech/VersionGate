@@ -10,6 +10,7 @@ import { logger } from "../utils/logger";
 import { ConflictError, DeploymentError, NotFoundError } from "../utils/errors";
 import { TrafficService } from "./traffic.service";
 import { GitService } from "./git.service";
+import { syncCustomDomainUpstream } from "./project-domain.service";
 
 export interface DeployOptions {
   projectId: string;
@@ -122,6 +123,7 @@ export class DeploymentService {
       if (switchPublicTraffic) {
         logger.info({ projectId, environmentId, step: 6, hostPort }, "Switching traffic");
         await this.traffic.switchTrafficTo(hostPort);
+        await syncCustomDomainUpstream(project.name, hostPort);
       } else {
         logger.info({ projectId, environmentId, envName: envRow.name }, "Skipping traffic switch (non-production)");
       }

@@ -5,7 +5,7 @@ import { DocsNav } from "./docs-nav";
 
 export const metadata: Metadata = {
   title: "Documentation — VersionGate",
-  description: "Setup, architecture, deployment pipeline, networking, and API reference for VersionGate.",
+  description: "Setup, architecture, deployment pipeline, networking, domain troubleshooting, and API reference for VersionGate.",
 };
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {

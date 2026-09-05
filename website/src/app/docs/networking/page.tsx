@@ -34,12 +34,41 @@ export default function Networking() {
         <InlineCode>DOCKER_NETWORK</InlineCode>), so services can reach each other by container name.
       </P>
 
-      <H2>Domains &amp; HTTPS</H2>
+      <H2>Project custom domains (production)</H2>
+      <P>
+        Each project can attach one production hostname (for example{" "}
+        <InlineCode>app.example.com</InlineCode>). VersionGate writes dedicated nginx files under{" "}
+        <InlineCode>/etc/nginx/conf.d/</InlineCode> and never overwrites the dashboard vhost in{" "}
+        <InlineCode>upstream.conf</InlineCode> or <InlineCode>versiongate.conf</InlineCode>.
+      </P>
+      <Code title="per-project nginx layout">{`# upstream — rewritten on every blue/green switch
+/etc/nginx/conf.d/vg-app-myapp.upstream.conf
+
+# server — one file per hostname (Certbot-safe)
+/etc/nginx/conf.d/vg-app-myapp-app-example-com.conf`}</Code>
+      <P>
+        Attach from the project page or via{" "}
+        <InlineCode>POST /api/v1/projects/:id/domains</InlineCode>. Point DNS A/AAAA at this
+        server, then run <InlineCode>POST .../domains/:domainId/ssl</InlineCode> to issue TLS with
+        Certbot (<InlineCode>CERTBOT_EMAIL</InlineCode> in <InlineCode>.env</InlineCode>). Until a
+        production deploy is ACTIVE, the upstream uses a down marker and the hostname returns 502/503.
+      </P>
+
+      <H2>Domains &amp; HTTPS (dashboard)</H2>
       <P>
         Settings → Dashboard URL lets you set <InlineCode>PUBLIC_DOMAIN</InlineCode> and provision
         certificates via Certbot. Preflight validates DNS resolution, certbot availability, and{" "}
         <InlineCode>CERTBOT_EMAIL</InlineCode> before attempting issuance.
       </P>
+      <Callout title="Hostname opens nowhere, dashboard says working">
+        PM2 online and preflight DNS are measured on the VPS. They do not prove your laptop can
+        resolve the name, or that nginx has a single vhost. Use the{" "}
+        <a href="/docs/troubleshooting" className="text-foreground underline underline-offset-2">
+          domain troubleshooting
+        </a>{" "}
+        guide: loopback curls, split-horizon DNS, hairpin NAT, and the three nginx files that
+        overwrite each other after install / Settings / Certbot.
+      </Callout>
 
       <H2>Webhook endpoints</H2>
       <P>
@@ -59,8 +88,8 @@ export default function Networking() {
       </Callout>
 
       <NextLinks
-        primary={{ href: "/docs/api-reference", label: "API Reference" }}
-        secondary={{ href: "/docs", label: "Back to Introduction" }}
+        primary={{ href: "/docs/troubleshooting", label: "Domain troubleshooting" }}
+        secondary={{ href: "/docs/api-reference", label: "API Reference" }}
       />
     </article>
   );

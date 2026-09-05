@@ -9,10 +9,12 @@ import { enqueueJob } from "../services/job-queue.service";
 import { config } from "../config/env";
 import { logger } from "../utils/logger";
 import { validateEnvObject } from "../utils/env";
+import { ProjectDomainService } from "../services/project-domain.service";
 
 const projectRepo = new ProjectRepository();
 const deploymentRepo = new DeploymentRepository();
 const envRepo = new EnvironmentRepository();
+const projectDomainService = new ProjectDomainService();
 
 interface CreateProjectBody {
   name: string;
@@ -121,6 +123,8 @@ export async function deleteProjectHandler(
   }
   await freeHostPort(project.basePort).catch(() => null);
   await freeHostPort(project.basePort + 1).catch(() => null);
+
+  await projectDomainService.cleanupProjectDomains(id, project.name);
 
   await projectRepo.delete(id);
   reply.code(204).send();

@@ -131,9 +131,15 @@ export default function Home() {
               </li>
             </ul>
 
-            <Link href="/docs/quick-start" className="vg-link">
-              quick-start docs
-            </Link>
+            <p className="font-mono text-[11px]">
+              <Link href="/docs/quick-start" className="vg-link">
+                quick-start docs
+              </Link>
+              <span className="text-[var(--vg-muted)]"> / </span>
+              <Link href="/docs/troubleshooting" className="vg-link">
+                domain troubleshooting
+              </Link>
+            </p>
           </div>
         </section>
       </main>

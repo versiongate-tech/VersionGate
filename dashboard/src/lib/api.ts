@@ -172,6 +172,46 @@ export function getProject(id: string): Promise<{ project: Project }> {
   return request("GET", `/projects/${id}`);
 }
 
+export type ProjectDomainSslStatus = "pending_dns" | "http" | "issued" | "failed";
+
+export interface ProjectDomain {
+  id: string;
+  hostname: string;
+  environmentName: string;
+  sslStatus: ProjectDomainSslStatus;
+  lastError: string | null;
+  dnsA: string[];
+  dnsOk: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function listProjectDomains(projectId: string): Promise<{
+  domains: ProjectDomain[];
+  resolvedPort: number | null;
+  expectedIpv4: string | null;
+}> {
+  return request("GET", `/projects/${projectId}/domains`);
+}
+
+export function attachProjectDomain(
+  projectId: string,
+  hostname: string
+): Promise<{ domain: ProjectDomain; resolvedPort: number | null }> {
+  return request("POST", `/projects/${projectId}/domains`, { hostname });
+}
+
+export function removeProjectDomain(projectId: string, domainId: string): Promise<void> {
+  return request("DELETE", `/projects/${projectId}/domains/${domainId}`);
+}
+
+export function issueProjectDomainSsl(
+  projectId: string,
+  domainId: string
+): Promise<{ ok: boolean; message: string; sslStatus: ProjectDomainSslStatus }> {
+  return request("POST", `/projects/${projectId}/domains/${domainId}/ssl`);
+}
+
 export function createProject(data: {
   name: string;
   repoUrl: string;

@@ -12,6 +12,7 @@ import { ValidationService } from "../../services/validation.service";
 import { completeJob, failJob } from "../../services/job-queue.service";
 import { humanizeDeployFailure } from "../../utils/deploy-errors";
 import { logEmitter } from "../../events/log-emitter";
+import { syncCustomDomainUpstream } from "../../services/project-domain.service";
 
 const repo = new DeploymentRepository();
 const envRepo = new EnvironmentRepository();
@@ -168,6 +169,7 @@ export async function runPromoteJob(
         projectName: project.name,
         environmentName: targetEnv.name,
       });
+      await syncCustomDomainUpstream(project.name, hostPort);
     } else {
       await log(`Skipping public traffic switch (target is not ${DEFAULT_ENVIRONMENT_NAME})`);
     }

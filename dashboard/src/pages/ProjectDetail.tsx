@@ -6,6 +6,7 @@ import {
   getDeployments,
   getProject,
   getProjectEnvironments,
+  listProjectDomains,
   listProjectJobs,
   rollback,
   triggerDeploy,
@@ -13,6 +14,7 @@ import {
   type EnvironmentSummary,
   type JobRecord,
   type Project,
+  type ProjectDomain,
 } from "@/lib/api";
 import { EnvironmentChain } from "@/components/badges/EnvironmentChain";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +27,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { BlueGreenTrafficCard } from "@/components/BlueGreenTrafficCard";
-import { getDeployingDeployment, publicEnvironmentUrl, publicServiceUrl } from "@/lib/deployment-display";
+import { getDeployingDeployment, publicProjectLiveUrl, publicServiceUrl } from "@/lib/deployment-display";
+import { ProjectCustomDomainCard } from "@/components/ProjectCustomDomainCard";
 import { AggregateJobLogStream } from "@/components/AggregateJobLogStream";
 import { jobArtifactLabel, jobDurationLabel } from "@/lib/job-display";
 import {
@@ -61,6 +64,7 @@ export function ProjectDetail() {
   const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
   const [environmentsError, setEnvironmentsError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
+  const [customDomains, setCustomDomains] = useState<ProjectDomain[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -91,6 +95,13 @@ export function ProjectDetail() {
       } catch (envEx) {
         setEnvironments([]);
         setEnvironmentsError(envEx instanceof Error ? envEx.message : "Failed to load environments");
+      }
+
+      try {
+        const domainData = await listProjectDomains(id);
+        setCustomDomains(domainData.domains ?? []);
+      } catch {
+        setCustomDomains([]);
       }
     } catch (e) {
       if (!isSilent) {
@@ -219,7 +230,7 @@ export function ProjectDetail() {
           : "PENDING";
 
   const liveHostPort = active ? active.port : project.basePort;
-  const liveUrl = publicEnvironmentUrl(project, "production", liveHostPort);
+  const liveUrl = publicProjectLiveUrl(project, customDomains, active?.port);
   const repoHref = /^https?:\/\//i.test(project.repoUrl)
     ? project.repoUrl
     : `https://${project.repoUrl}`;
@@ -537,6 +548,12 @@ export function ProjectDetail() {
         </div>
 
         <aside className="space-y-4">
+          <ProjectCustomDomainCard
+            projectId={project.id}
+            onUpdated={() => {
+              void load(true);
+            }}
+          />
           <Card className="border-border bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="font-mono text-xs uppercase tracking-wider">Project Resources</CardTitle>

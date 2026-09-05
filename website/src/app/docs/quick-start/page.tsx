@@ -23,6 +23,14 @@ export default function QuickStart() {
       <P>
         The installer configures Nginx to proxy incoming traffic on ports 80 and 443 to the local VersionGate API and dashboard on <InlineCode>127.0.0.1:9090</InlineCode>.
       </P>
+      <Callout title="Domain set, dashboard says working, browser does not open it">
+        That is usually DNS on the client, hairpin NAT when curling the public IP from the VPS, or
+        three nginx files claiming the same hostname. See{" "}
+        <a href="/docs/troubleshooting" className="text-foreground underline underline-offset-2">
+          Domain troubleshooting
+        </a>
+        .
+      </Callout>
 
       <H2>Azure Network Security Group (NSG) Configuration</H2>
       <P>

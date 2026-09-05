@@ -5,6 +5,7 @@ import {
   getInstanceSettings,
   getProjects,
   listAllJobs,
+  listProjectDomains,
   listProjectJobs,
   triggerDeploy,
   type Deployment,
@@ -25,9 +26,8 @@ import {
   getActiveDeployment,
   getDeployingDeployment,
   getDisplayDeployment,
-  guessEnvironmentLabel,
   latestDeploymentForColor,
-  publicEnvironmentUrl,
+  publicProjectLiveUrl,
   publicServiceUrl,
   setConfiguredPublicHost,
 } from "@/lib/deployment-display";
@@ -63,6 +63,7 @@ export function Overview() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [domainsByProject, setDomainsByProject] = useState<Record<string, { hostname: string; sslStatus: string }[]>>({});
   const [latestJobs, setLatestJobs] = useState<Record<string, JobRecord | undefined>>({});
   const [recentJobs, setRecentJobs] = useState<JobRecord[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -83,6 +84,18 @@ export function Overview() {
       setDeployments(d.deployments);
       setRecentJobs(allJobs.jobs);
       setConfiguredPublicHost(inst?.publicDomain);
+
+      const domainEntries = await Promise.all(
+        p.projects.map(async (proj: Project) => {
+          try {
+            const r = await listProjectDomains(proj.id);
+            return [proj.id, r.domains] as const;
+          } catch {
+            return [proj.id, []] as const;
+          }
+        })
+      );
+      setDomainsByProject(Object.fromEntries(domainEntries));
 
       const jobEntries = await Promise.all(
         p.projects.map(async (proj: Project) => {
@@ -284,10 +297,10 @@ export function Overview() {
                 const st = projectDeploymentStatus(p.id, deployments);
                 const job = latestJobs[p.id];
                 const hostPort = row?.port ?? null;
-                const envLabel = row ? guessEnvironmentLabel(p, row) : "production";
+                const domains = domainsByProject[p.id] ?? [];
                 const hostUrl =
-                  hostPort != null
-                    ? publicEnvironmentUrl(p, envLabel !== "—" ? envLabel : "production", hostPort)
+                  hostPort != null || domains.length > 0
+                    ? publicProjectLiveUrl(p, domains, hostPort)
                     : null;
                 const active = getActiveDeployment(p.id, deployments);
                 const deploying = getDeployingDeployment(p.id, deployments);

@@ -44,11 +44,42 @@ interface ProcessedRelease {
 
 const FALLBACK_RELEASES: ProcessedRelease[] = [
   {
-    version: "v2.3.1",
+    version: "v2.4.0",
     date: "September 5, 2026",
     isLatest: true,
     summary:
-      "Landing page, README, and capability grid rewritten against src/ — single-container scope stated up front, fictional versiongate CLI and dashboard-only cards removed, job log format aligned with deploy.handler.ts.",
+      "Production custom domains per project: isolated nginx upstream and server files, Certbot TLS per hostname, dashboard Live/Open links prefer the attached domain, and deploy traffic sync rewrites the app upstream after blue/green switches.",
+    categories: [
+      {
+        title: "Networking",
+        badge: "NEW",
+        items: [
+          {
+            title: "Project custom domains API",
+            description:
+              "GET/POST /api/v1/projects/:id/domains, DELETE .../domains/:domainId, POST .../domains/:domainId/ssl. One production hostname per project; staging domains planned later.",
+            command: 'POST /api/v1/projects/:id/domains  {"hostname":"app.example.com"}',
+          },
+          {
+            title: "Isolated nginx layout",
+            description:
+              "vg-app-{project}.upstream.conf switches with ACTIVE production port; vg-app-{project}-{hostname}.conf stays Certbot-owned and separate from dashboard upstream.conf.",
+          },
+          {
+            title: "Dashboard Live URL preference",
+            description:
+              "Project detail, Overview, and Projects list prefer https:// when sslStatus is issued, otherwise http:// on the custom hostname before falling back to /p/{project}/production.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    version: "v2.3.1",
+    date: "September 5, 2026",
+    isLatest: false,
+    summary:
+      "Landing page, README, and capability grid rewritten against src/ — single-container scope stated up front, fictional versiongate CLI and dashboard-only cards removed, job log format aligned with deploy.handler.ts. Domain troubleshooting runbook added for hostname vs engine-health mismatches.",
     categories: [
       {
         title: "Documentation & Marketing Accuracy",
@@ -68,6 +99,11 @@ const FALLBACK_RELEASES: ProcessedRelease[] = [
             title: "Simulator and Q&A source-aligned snippets",
             description:
               "Job log lines match deploy.handler.ts and rollback.handler.ts; Q&A code excerpts reference traffic.service.ts, docker.ts, and auth routes.",
+          },
+          {
+            title: "Domain troubleshooting runbook",
+            description:
+              "Docs for when PM2 and preflight say working but the hostname does not open: split-horizon DNS, hairpin NAT on Proxmox/NAT VPS, and the three nginx files (sites-available/versiongate, conf.d/versiongate.conf, upstream.conf).",
           },
         ],
       },

@@ -47,6 +47,28 @@ const CAPABILITIES: Capability[] = [
     badge: "Engine",
   },
   {
+    id: "cap-projectdomain",
+    category: "Networking",
+    title: "Project Custom Domains",
+    command: 'POST /api/v1/projects/:id/domains  {"hostname":"app.example.com"}',
+    description:
+      "Attach a production hostname per project. VersionGate writes isolated nginx upstream and server files, then Certbot can issue TLS without touching the dashboard vhost.",
+    details:
+      "vg-app-{project}.upstream.conf rewrites on blue/green switch. vg-app-{project}-{hostname}.conf stays Certbot-owned. No ACTIVE deploy points upstream at 127.0.0.1:9 down until the first healthy production slot is live.",
+    badge: "NEW",
+  },
+  {
+    id: "cap-domaindiag",
+    category: "Networking",
+    title: "Public Domain Diagnosis",
+    command: "dig +short $PUBLIC_DOMAIN A @8.8.8.8",
+    description:
+      "When the dashboard says working but the hostname does not open, test loopback, Host header, TLS, then client DNS separately from the VPS resolver.",
+    details:
+      "Preflight DNS and PM2 only prove the engine on this host. Hairpin NAT makes curl to the public IP hang on Proxmox/NAT VPS. install.sh, Settings (NGINX_CONFIG_PATH=/etc/nginx/conf.d/upstream.conf), and certbot write three competing vhosts. Apps stay on /p/:project/:env — not a second hostname.",
+    badge: "Ops",
+  },
+  {
     id: "cap-stageproxy",
     category: "Networking",
     title: "Stage Path Reverse Proxy",

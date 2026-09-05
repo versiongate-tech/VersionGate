@@ -1,7 +1,7 @@
 import { decryptProjectEnv } from "../utils/env";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 import { ProjectRepository } from "../repositories/project.repository";
-import { EnvironmentRepository } from "../repositories/environment.repository";
+import { EnvironmentRepository, DEFAULT_ENVIRONMENT_NAME } from "../repositories/environment.repository";
 import { DeploymentSelect } from "../db/schema";
 import { TrafficService } from "./traffic.service";
 import { ValidationService } from "./validation.service";
@@ -9,6 +9,7 @@ import { runContainer, stopContainer, removeContainer } from "../utils/docker";
 import { config } from "../config/env";
 import { logger } from "../utils/logger";
 import { NotFoundError, DeploymentError, BadRequestError } from "../utils/errors";
+import { syncCustomDomainUpstream } from "./project-domain.service";
 
 export interface RollbackResult {
   rolledBackFrom: DeploymentSelect;
@@ -104,6 +105,10 @@ export class RollbackService {
     }
 
     await this.traffic.switchTrafficTo(previous.port);
+
+    if (envRow.name === DEFAULT_ENVIRONMENT_NAME) {
+      await syncCustomDomainUpstream(project.name, previous.port);
+    }
 
     await stopContainer(current.containerName).catch((err) => {
       logger.warn({ err, containerName: current.containerName }, "Failed to stop current container during rollback");
