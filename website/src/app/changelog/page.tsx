@@ -578,7 +578,7 @@ export default async function ChangelogPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors">
-      <SiteHeader active="features" />
+      <SiteHeader />
 
       <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         {/* Page Header */}

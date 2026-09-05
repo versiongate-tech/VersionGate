@@ -1,311 +1,144 @@
-"use client";
-
 import Link from "next/link";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
-import { CapabilityGrid } from "@/components/capability-grid";
-import { ExecutionSandbox } from "@/components/execution-sandbox";
-import { TopologyVisualizer } from "@/components/topology-visualizer";
-import { CommunityQnA } from "@/components/community-qna";
-import { HeroDeployVisual } from "@/components/hero-deploy-visual";
+import { SPEC_SECTIONS } from "@/lib/engine-spec";
+import { ApiSurface } from "@/components/landing/api-surface";
+import { FeatureReference } from "@/components/landing/feature-reference";
+import { JobLogPanel } from "@/components/landing/job-log-panel";
+import { LandingFooter, LandingShellHeader } from "@/components/landing/landing-chrome";
+import {
+  LandingHeroDiagram,
+  LandingPipeline,
+  LandingStack,
+} from "@/components/landing/landing-diagrams";
 
-const GITHUB_REPO = "https://github.com/dineshkorukonda/VersionGate";
-const INSTALL_CMD = "curl -fsSL https://versiongate.tech/install.sh | sudo bash";
-
-const LOOP = [
-  {
-    step: "01",
-    label: "Build",
-    title: "Idle slot image build",
-    body: "Pull the environment branch, run ensureDockerfile(), docker build one image, docker run on the idle BLUE or GREEN host port.",
-  },
-  {
-    step: "02",
-    label: "Prove",
-    title: "HTTP health check",
-    body: "GET project.healthPath on http://localhost:{idlePort}. Failure aborts the deploy; the active slot keeps serving traffic.",
-  },
-  {
-    step: "03",
-    label: "Swap",
-    title: "Nginx upstream reload",
-    body: "Write upstream config and nginx -s reload for the production environment. Non-production stages use /p/:project/:env proxy routes instead.",
-  },
-  {
-    step: "04",
-    label: "Recover",
-    title: "Warm-swap rollback",
-    body: "Re-run the previous deployment's local Docker image tag, validate health, reload Nginx, stop the current container.",
-  },
-] as const;
+const GITHUB = "https://github.com/dineshkorukonda/VersionGate";
+const INSTALL = "curl -fsSL https://versiongate.tech/install.sh | sudo bash";
 
 export default function Home() {
   return (
-    <div className="landing-shell min-h-screen">
-      <div className="border-b border-[#3effa8] bg-[#3effa8]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2.5 sm:px-6">
-          <p className="font-mono text-[11px] font-semibold tracking-[0.08em] text-black">
-            Single-container Docker deploys — one image per project environment, blue/green host ports
+    <div className="vg-landing min-h-screen">
+      <LandingShellHeader />
+
+      <main className="mx-auto max-w-2xl px-6 py-14 space-y-16">
+        <section id="overview" className="scroll-mt-24">
+          <p className="vg-kicker">self-hosted deploy engine</p>
+          <h1 className="mt-4 font-mono text-2xl font-semibold leading-snug tracking-tight text-[var(--vg-text)] sm:text-[1.65rem]">
+            Blue/green Docker deploys — one container per environment.
+          </h1>
+          <p className="mt-6 font-mono text-[13px] leading-relaxed text-[var(--vg-muted)]">
+            I built VersionGate to run my own apps on a VPS: git push builds on an idle host port, a health check
+            gates the Nginx reload, rollback reuses a cached image tag. Dashboard, HTTP API, and webhooks — no CLI
+            binary, no hosted service.
           </p>
-          <Link
-            href="/docs/quick-start"
-            className="shrink-0 font-mono text-[11px] font-semibold tracking-[0.12em] text-black underline-offset-2 hover:underline"
-          >
-            QUICK START →
-          </Link>
-        </div>
-      </div>
 
-      <SiteHeader />
-
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0">
-          <HeroDeployVisual />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-transparent lg:via-black/70" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30 lg:hidden" />
-
-        <div className="relative mx-auto flex min-h-[100vh] max-w-7xl items-center px-4 pb-28 pt-28 sm:px-6 lg:pb-24 lg:pt-32">
-          <div className="max-w-xl landing-fade-up lg:max-w-[34rem]">
-            <p className="font-display text-[clamp(3.2rem,8.5vw,6.25rem)] font-bold uppercase leading-[0.88] tracking-[-0.06em] text-white">
-              VersionGate
-            </p>
-            <h1 className="mt-8 max-w-lg font-display text-[clamp(1.35rem,2.6vw,1.85rem)] font-medium uppercase leading-[1.15] tracking-[-0.02em] text-white">
-              Blue/green deploys for one container per environment.
-            </h1>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-white/60">
-              Self-hosted engine: git pull, single Dockerfile build, health check on the idle slot, Nginx reload for production, rollback from cached image tags. No docker-compose.
-            </p>
-            <div className="mt-10 flex flex-wrap items-center gap-3">
-              <Link
-                href="/docs"
-                className="bg-[#3effa8] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
-              >
-                Read documentation
-              </Link>
-              <Link
-                href={GITHUB_REPO}
-                target="_blank"
-                rel="noreferrer"
-                className="border border-white/20 px-5 py-3 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5"
-              >
-                GitHub repository
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="border-t border-white/10 py-28 sm:py-36">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <p className="landing-eyebrow">Scope</p>
-          <h2 className="landing-headline mt-6 text-[clamp(2rem,5vw,3.4rem)] text-white">
-            One container.
-            <br />
-            One Dockerfile.
-          </h2>
-          <div className="landing-prose mt-10 space-y-6">
-            <p>
-              VersionGate deploys a single Docker container per project per environment. Each environment uses two host ports (BLUE at basePort, GREEN at basePort + 1) to run the next revision before switching traffic.
-            </p>
-            <p>
-              There is no docker-compose support in the engine. A project with separate frontend, API, and database services must be packaged into one container (or supply its own Dockerfile that runs what you need in one process tree).
-            </p>
-            <p className="emphasis">
-              Auto-generated Dockerfiles detect Node (package.json), Python (requirements.txt), Go (go.mod), or static HTML (index.html) — first match per scanned directory.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="architecture-loop" className="border-t border-white/10 py-28 sm:py-36">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="max-w-2xl">
-            <p className="landing-eyebrow">Architecture</p>
-            <h2 className="landing-headline mt-6 text-[clamp(2rem,4.5vw,3.1rem)] text-white">
-              Deploy pipeline
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/55">
-              Worker job steps from deploy.handler.ts: source prep, single-image build, health gate, optional Nginx switch, retire previous slot.
-            </p>
+          <div className="mt-8 vg-callout">
+            One Docker container per project per environment. No docker-compose in src/. Pack multi-service apps into
+            one container or supply your own Dockerfile.
           </div>
 
-          <div className="mt-16 grid gap-px overflow-hidden border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-            {LOOP.map((item) => (
-              <article key={item.step} className="bg-black p-7 sm:p-8">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-mono text-xs text-[#3effa8]">{item.step} //</span>
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">
-                    {item.label}
-                  </span>
-                </div>
-                <h3 className="mt-8 font-display text-lg font-semibold uppercase tracking-[-0.02em] text-white">
-                  {item.title}
-                </h3>
-                <p className="mt-3 text-sm leading-relaxed text-white/50">{item.body}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="border-t border-white/10 py-28 sm:py-36">
-        <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:items-center lg:gap-16">
-          <div>
-            <p className="landing-eyebrow">Rollback</p>
-            <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Re-run the previous image tag.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/55">
-              rollback.handler restores the prior deployment record. When imageExists() finds the tag locally, it skips git pull and docker build before health check and traffic switch.
-            </p>
-          </div>
-          <div className="border border-white/10 bg-[#050505] p-5 sm:p-6">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 font-mono text-[11px]">
-              <span className="text-white/45">rollback job log</span>
-              <span className="text-[#3effa8]">rollback.handler</span>
-            </div>
-            <div className="mt-4 space-y-2 font-mono text-[12px] leading-relaxed text-white/65">
-              <p>Rolling back from web-app-production-green (v14) to web-app-production-blue (v13)</p>
-              <p>[WARM-SWAP] Found cached Docker image versiongate-web-app:1710000000000. Spinning up instant container…</p>
-              <p>Validating health at http://localhost:3100/health</p>
-              <p>Switching traffic to port 3100</p>
-              <p className="text-[#3effa8]">Rollback completed: Rolled back from v14 to v13</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="sandbox" className="border-t border-white/10 py-28 sm:py-36">
-        <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
-          <div className="max-w-2xl">
-            <p className="landing-eyebrow">Log format</p>
-            <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Job stream lines from deploy and rollback handlers.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/55">
-              Plain-text lines emitted via logEmitter during worker jobs — not pino JSON and not a versiongate CLI.
-            </p>
-          </div>
-          <ExecutionSandbox />
-        </div>
-      </section>
-
-      <section id="capabilities" className="border-t border-white/10 bg-white/[0.02] py-28 sm:py-36">
-        <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
-          <div className="max-w-2xl">
-            <p className="landing-eyebrow">Capabilities</p>
-            <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Engine features verified against src/.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/55">
-              API routes and host scripts only — no fictional versiongate CLI commands.
-            </p>
-          </div>
-          <CapabilityGrid />
-        </div>
-      </section>
-
-      <section id="architecture" className="border-t border-white/10 py-28 sm:py-36">
-        <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
-          <div className="max-w-2xl">
-            <p className="landing-eyebrow">Pipeline</p>
-            <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Webhook to Nginx reload.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/55">
-              Lock, single-container build, validation, and traffic switch as implemented in src/worker/handlers/deploy.handler.ts.
-            </p>
-          </div>
-          <TopologyVisualizer />
-        </div>
-      </section>
-
-      <section id="install" className="border-t border-white/10 py-28 sm:py-36">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="max-w-2xl">
-            <p className="landing-eyebrow">Install</p>
-            <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Host bootstrap and CI deploy.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/55">
-              install.sh sets up the host. Deploys use POST /api/v1/deploy with projectId (not project name).
-            </p>
+          <div className="mt-8 flex flex-wrap gap-6">
+            <Link href="#run" className="vg-btn">
+              Install
+            </Link>
+            <Link href={GITHUB} target="_blank" rel="noreferrer" className="vg-btn">
+              Source
+            </Link>
+            <Link href="/docs" className="vg-link-muted">
+              documentation
+            </Link>
           </div>
 
-          <div className="mt-14 grid gap-4 lg:grid-cols-2">
-            <div className="border border-white/10 bg-[#050505] p-5 sm:p-6">
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-                <span className="font-mono text-xs text-white/45">install.sh</span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#3effa8]">
-                  Step 1
-                </span>
+          <div className="mt-12 grid gap-10 lg:grid-cols-2">
+            <div>
+              <p className="vg-kicker">stack</p>
+              <div className="mt-4">
+                <LandingStack />
               </div>
-              <pre className="mt-4 overflow-x-auto font-mono text-[13px] leading-relaxed text-white/85">
-                <code>{INSTALL_CMD}</code>
+            </div>
+            <LandingHeroDiagram />
+          </div>
+        </section>
+
+        <section id="pipeline" className="scroll-mt-24">
+          <h2 className="vg-heading">Deploy pipeline</h2>
+          <p className="mt-3 font-mono text-[11px] text-[var(--vg-muted)]">
+            Worker steps in deploy.handler.ts
+          </p>
+          <div className="mt-6">
+            <LandingPipeline />
+          </div>
+          <div className="mt-6">
+            <JobLogPanel />
+          </div>
+        </section>
+
+        <section id="spec" className="scroll-mt-24">
+          <h2 className="vg-heading">Engine spec</h2>
+          <p className="mt-3 font-mono text-[11px] text-[var(--vg-muted)]">
+            Features in src/ — endpoints, mechanisms, limits
+          </p>
+          <div className="mt-6">
+            <FeatureReference sections={SPEC_SECTIONS} />
+          </div>
+        </section>
+
+        <section id="api" className="scroll-mt-24">
+          <h2 className="vg-heading">HTTP surface</h2>
+          <p className="mt-3 font-mono text-[11px] text-[var(--vg-muted)]">
+            Session cookie or Authorization: Bearer vg_live_*
+          </p>
+          <div className="mt-6">
+            <ApiSurface />
+          </div>
+        </section>
+
+        <section id="run" className="scroll-mt-24">
+          <h2 className="vg-heading">Run it</h2>
+          <p className="mt-3 font-mono text-[11px] text-[var(--vg-muted)]">
+            install.sh on the host, then dashboard or curl
+          </p>
+
+          <div className="mt-6 space-y-8">
+            <div>
+              <p className="vg-kicker">install</p>
+              <pre className="mt-3 overflow-x-auto font-mono text-[12px] text-[var(--vg-text)] vg-rule pb-4">
+                <code>{INSTALL}</code>
               </pre>
             </div>
 
-            <div className="border border-white/10 bg-[#050505] p-5 sm:p-6">
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-                <span className="font-mono text-xs text-white/45">deploy API</span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#3effa8]">
-                  Step 2
-                </span>
-              </div>
-              <pre className="mt-4 overflow-x-auto font-mono text-[13px] leading-relaxed text-white/85">
+            <div>
+              <p className="vg-kicker">ci deploy</p>
+              <pre className="mt-3 overflow-x-auto font-mono text-[11px] leading-relaxed text-[var(--vg-text)] vg-rule pb-4">
                 <code>{`curl -X POST "$VG_URL/api/v1/deploy" \\
   -H "Authorization: Bearer $VG_TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d '{"projectId":"proj_abc","environmentId":"env_prod"}'`}</code>
+  -d '{"projectId":"...","environmentId":"..."}'`}</code>
               </pre>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <section id="qna" className="border-t border-white/10 bg-white/[0.02] py-28 sm:py-36">
-        <div className="mx-auto max-w-7xl space-y-10 px-4 sm:px-6">
-          <div className="max-w-2xl">
-            <p className="landing-eyebrow">Reference</p>
-            <h2 className="landing-headline mt-6 text-[clamp(1.8rem,3.8vw,2.7rem)] text-white">
-              Common questions with source-aligned snippets.
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/55">
-              Code excerpts match current src/ implementations — traffic.service.ts, rollback.handler.ts, deploy.handler.ts, docker.ts.
-            </p>
-          </div>
-          <CommunityQnA />
-        </div>
-      </section>
+            <ul className="space-y-2 font-mono text-[11px] text-[var(--vg-muted)]">
+              <li className="vg-rule pb-2">
+                <span className="text-[var(--vg-text)]">rollback</span> POST /api/v1/projects/:id/rollback
+              </li>
+              <li className="vg-rule pb-2">
+                <span className="text-[var(--vg-text)]">promote</span> POST
+                /api/v1/projects/:id/environments/:envId/promote
+              </li>
+              <li className="vg-rule pb-2">
+                <span className="text-[var(--vg-text)]">logs</span> WS /api/v1/logs/:jobId
+              </li>
+              <li className="vg-rule pb-2">
+                <span className="text-[var(--vg-text)]">stage</span> GET /p/:project/:env/
+              </li>
+            </ul>
 
-      <section className="border-t border-white/10 py-28 sm:py-40">
-        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-          <p className="landing-eyebrow">Get started</p>
-          <h2 className="landing-headline mt-6 text-[clamp(1.9rem,4vw,3rem)] text-white">
-            One container per environment.
-          </h2>
-          <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-white/55">
-            Install on a VPS, connect a GitHub repo, deploy a single-service app with blue/green host ports.
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/docs/quick-start"
-              className="bg-[#3effa8] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
-            >
-              Quick start
-            </Link>
-            <Link
-              href="/changelog"
-              className="border border-white/20 px-5 py-3 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5"
-            >
-              Changelog
+            <Link href="/docs/quick-start" className="vg-link">
+              quick-start docs
             </Link>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      <SiteFooter />
+      <LandingFooter />
     </div>
   );
 }
